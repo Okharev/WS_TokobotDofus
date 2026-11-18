@@ -26,6 +26,7 @@ AMinionCharacter::AMinionCharacter()
 		Capsule->SetCollisionResponseToAllChannels(ECR_Block);
 		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+		// Overlap other Pawns (Player and other Minions) so they never physically push or block each other
 		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 		Capsule->SetCanEverAffectNavigation(false);
 	}
@@ -59,6 +60,7 @@ void AMinionCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Enforce zero-push Pawn overlap and NavAgent dimensions in case a Blueprint preset overrode them
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
@@ -134,6 +136,7 @@ void AMinionCharacter::SetWhipModeEnabled(bool bEnabled)
 
 		if (Capsule)
 		{
+			// Lock Pitch (X) and Roll (Y) in Chaos so the minion stays upright while constrained in the whip
 			if (FBodyInstance* BodyInst = Capsule->GetBodyInstance())
 			{
 				BodyInst->bLockXRotation = true;
@@ -190,7 +193,6 @@ void AMinionCharacter::SetCarryRushModeEnabled(bool bEnabled)
 	{
 		CurrentState = EMinionState::InCarryRush;
 
-		// Ensure Chaos physics is turned off if we transitioned directly from AttackWhip
 		if (Capsule && Capsule->IsSimulatingPhysics())
 		{
 			Capsule->SetPhysicsLinearVelocity(FVector::ZeroVector);

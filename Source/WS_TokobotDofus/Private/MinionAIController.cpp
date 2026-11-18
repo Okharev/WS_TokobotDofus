@@ -33,7 +33,7 @@ void AMinionAIController::OnPossess(APawn* InPawn)
 	{
 		CrowdFollowingComponent->SetCrowdSimulationState(ECrowdSimulationState::Enabled);
 		CrowdFollowingComponent->SetCrowdSeparation(true);
-		// Use standard 2.0f separation (instead of 60.0f) so inner slots don't repel approaching minions
+		// Gentle 2.0f separation so inner formation slots never repel approaching minions
 		CrowdFollowingComponent->SetCrowdSeparationWeight(2.0f);
 		CrowdFollowingComponent->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::High);
 		CrowdFollowingComponent->SetCrowdAnticipateTurns(true);

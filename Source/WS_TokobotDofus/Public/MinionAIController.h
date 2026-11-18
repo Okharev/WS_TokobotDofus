@@ -18,7 +18,7 @@ class WS_TOKOBOTDOFUS_API AMinionAIController : public AAIController
 public:
 	explicit AMinionAIController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Enables or disables Detour Crowd simulation (disabled during airborne NavLink jumps). */
+	/** Enables or disables Detour Crowd simulation (disabled during NavLink jumps, Whip chains, and Carry stance). */
 	void SetCrowdSteeringEnabled(bool bEnabled);
 
 	/** Helper to retrieve the cast CrowdFollowingComponent. */

@@ -7,10 +7,10 @@
 #include "MinionNavLinkProxy.generated.h"
 
 /**
- * Smart NavLink Proxy with 3D viewport widgets that launches minions across gaps or ledges.
+ * Smart NavLink Proxy with 3D draggable viewport widgets that launches minions across gaps or ledges.
  */
 UCLASS()
-class WS_TOKOBOTDOFUS_API AMinionNavLinkProxy : public ANavLinkProxy
+class AMinionNavLinkProxy : public ANavLinkProxy
 {
 	GENERATED_BODY()
 
@@ -34,7 +34,7 @@ protected:
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "MinionNavLink")
 	TEnumAsByte<ENavLinkDirection::Type> LinkDirection = ENavLinkDirection::BothWays;
 
-	/** Arc height parameter (0.1 = flat leap, 0.5 = standard 45-degree arc, 0.85 = high lob up a ledge). */
+	/** Arc height parameter (0.1 = flat leap, 0.5 = standard 45-degree arc, 0.85 = high lob). */
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "MinionNavLink", meta = (ClampMin = "0.1", ClampMax = "0.9"))
 	float JumpArcHeight = 0.5f;
 
@@ -51,7 +51,6 @@ protected:
 	bool bDrawDebugJumpArc = true;
 
 private:
-	/** Bound to OnSmartLinkReached to compute the launch arc and trigger the minion's jump. */
 	UFUNCTION()
 	void HandleSmartLinkReached(AActor* MovingActor, const FVector& DestinationPoint);
 };

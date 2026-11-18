@@ -21,7 +21,6 @@ AMinionNavLinkProxy::AMinionNavLinkProxy()
 
 void AMinionNavLinkProxy::OnConstruction(const FTransform& Transform)
 {
-	// Keep PointLinks empty so AI never walks across in a straight line without firing OnSmartLinkReached
 	PointLinks.Empty();
 	bSmartLinkIsRelevant = true;
 
@@ -34,7 +33,6 @@ void AMinionNavLinkProxy::OnConstruction(const FTransform& Transform)
 
 	Super::OnConstruction(Transform);
 
-	// Force the NavMesh to rebuild the link connection immediately when dragging handles in the editor
 	if (UWorld* World = GetWorld())
 	{
 		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
