@@ -10,7 +10,7 @@
  * Smart NavLink Proxy with 3D draggable viewport widgets that launches minions across gaps or ledges.
  */
 UCLASS()
-class AMinionNavLinkProxy : public ANavLinkProxy
+class WS_TOKOBOTDOFUS_API AMinionNavLinkProxy : public ANavLinkProxy
 {
 	GENERATED_BODY()
 
@@ -38,7 +38,7 @@ protected:
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "MinionNavLink", meta = (ClampMin = "0.1", ClampMax = "0.9"))
 	float JumpArcHeight = 0.5f;
 
-	/** Upward Z offset added to the destination point so minions clear ledge lips cleanly. */
+	/** Upward Z offset added to the destination point		so minions clear ledge lips cleanly. */
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "MinionNavLink")
 	float LandingHeightPadding = 35.0f;
 

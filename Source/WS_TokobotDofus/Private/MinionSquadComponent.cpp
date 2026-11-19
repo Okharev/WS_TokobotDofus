@@ -2339,8 +2339,6 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	}
 }
 
-
-
 FVector UMinionSquadComponent::CalculateSlotWorldLocation(int32 SlotIndex) const
 {
 	constexpr int32 ColumnsPerRow = 4;
