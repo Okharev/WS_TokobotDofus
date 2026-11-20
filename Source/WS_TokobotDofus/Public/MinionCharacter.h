@@ -18,10 +18,10 @@ UCLASS()
 class WS_TOKOBOTDOFUS_API AMinionCharacter : public ACharacter, public IMinionAgentInterface
 {
 	GENERATED_BODY()
-
+	
 public:
 	AMinionCharacter();
-
+	
 	// ~Begin IMinionAgentInterface
 	virtual EMinionState GetMinionState() const override { return CurrentState; }
 	virtual bool MoveToSquadSlot(const FVector& ProjectedSlotLocation) override;

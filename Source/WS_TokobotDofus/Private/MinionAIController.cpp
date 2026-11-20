@@ -17,6 +17,7 @@ void AMinionAIController::OnPossess(APawn* InPawn)
 	{
 		if (UCharacterMovementComponent* MoveComp = PossessedChar->GetCharacterMovement())
 		{
+			
 			MoveComp->SetUpdateNavAgentWithOwnersCollisions(true);
 			MoveComp->UpdateNavAgent(*PossessedChar);
 		}
@@ -24,6 +25,8 @@ void AMinionAIController::OnPossess(APawn* InPawn)
 
 	Super::OnPossess(InPawn);
 
+	
+	
 	if (!CrowdFollowingComponent)
 	{
 		CrowdFollowingComponent = Cast<UCrowdFollowingComponent>(GetPathFollowingComponent());

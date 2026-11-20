@@ -146,7 +146,7 @@ void AMinionCharacter::SetWhipModeEnabled(bool bEnabled)
 				BodyInst->AngularDamping = 4.0f;
 				BodyInst->SetDOFLock(EDOFMode::SixDOF);
 			}
-
+			
 			Capsule->SetSimulatePhysics(true);
 			Capsule->WakeAllRigidBodies();
 		}

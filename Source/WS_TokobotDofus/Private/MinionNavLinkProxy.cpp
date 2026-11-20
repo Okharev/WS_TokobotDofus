@@ -23,6 +23,7 @@ void AMinionNavLinkProxy::OnConstruction(const FTransform& Transform)
 {
 	PointLinks.Empty();
 	bSmartLinkIsRelevant = true;
+	
 
 	if (UNavLinkCustomComponent* SmartComp = GetSmartLinkComp())
 	{
