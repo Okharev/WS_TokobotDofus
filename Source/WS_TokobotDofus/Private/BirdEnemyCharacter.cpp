@@ -8,6 +8,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "DrawDebugHelpers.h"
+#include "HitFeedbackSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
@@ -15,6 +16,14 @@
 // ============================================================================
 // LIFECYCLE & COMPONENT SETUP
 // ============================================================================
+
+class UHitFeedbackSubsystem;
+
+void ABirdEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ClearFallbackAttackTimers();
+	Super::EndPlay(EndPlayReason);
+}
 
 ABirdEnemyCharacter::ABirdEnemyCharacter()
 {
@@ -179,6 +188,57 @@ void ABirdEnemyCharacter::UpdateHoverAndAnimTelemetry(float DeltaTime)
 		-Tuning.MaxBankAngle,
 		Tuning.MaxBankAngle);
 	AnimState.BankAngle = FMath::FInterpTo(AnimState.BankAngle, TargetBank, DeltaTime, 8.f);
+
+	// Visual collision & Z-height debugs (enable via BP_BirdEnemy -> Tuning -> bDrawDebugTraces)
+	if (Tuning.bDrawDebugTraces)
+	{
+		if (const UCapsuleComponent* Cap = GetCapsuleComponent())
+		{
+			DrawDebugCapsule(
+				World,
+				Cap->GetComponentLocation(),
+				Cap->GetScaledCapsuleHalfHeight(),
+				Cap->GetScaledCapsuleRadius(),
+				Cap->GetComponentQuat(),
+				FColor::Blue,
+				false,
+				-1.0f,
+				0,
+				1.5f);
+		}
+
+		if (HurtboxSphere)
+		{
+			DrawDebugSphere(
+				World,
+				HurtboxSphere->GetComponentLocation(),
+				HurtboxSphere->GetScaledSphereRadius(),
+				12,
+				FColor::Magenta,
+				false,
+				-1.0f,
+				0,
+				1.5f);
+		}
+
+		const int32 CurHearts = HealthComp ? HealthComp->GetCurrentHearts() : -1;
+		const int32 MaxH = HealthComp ? HealthComp->GetMaxHearts() : -1;
+		const bool bStaggered = HealthComp ? HealthComp->IsStaggered() : false;
+
+		DrawDebugString(
+			World,
+			BirdMesh->GetComponentLocation() + FVector(0.f, 0.f, 45.f),
+			FString::Printf(TEXT("Hearts: %d/%d | Stagger:%d | CapsuleZ:%.0f | HurtboxZ:%.0f"),
+				CurHearts,
+				MaxH,
+				bStaggered ? 1 : 0,
+				GetActorLocation().Z,
+				HurtboxSphere ? HurtboxSphere->GetComponentLocation().Z : 0.f),
+			nullptr,
+			FColor::White,
+			0.0f,
+			true);
+	}
 }
 
 // ============================================================================
@@ -217,6 +277,7 @@ void ABirdEnemyCharacter::SetAIState(EBirdAIState NewState)
 	BP_OnAIStateChanged(OldState, NewState);
 }
 
+
 // ============================================================================
 // OFFENSIVE ATTACK MONTAGE & HITBOX SWEEP (Driven by StateTree & AnimNotifyState)
 // ============================================================================
@@ -229,35 +290,40 @@ bool ABirdEnemyCharacter::StartAttack(AActor* TargetActor)
 		return false;
 	}
 
-	if (!Tuning.AttackMontage)
+	// Path A: Montage-driven attack (uses UANS_BirdAttackHitbox NotifyState).
+	if (Tuning.AttackMontage)
 	{
-		return false;
+		UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+		if (!AnimInstance)
+		{
+			return false;
+		}
+
+		const float Duration = AnimInstance->Montage_Play(Tuning.AttackMontage);
+		if (Duration <= 0.f)
+		{
+			return false;
+		}
+
+		AnimState.bIsAttacking = true;
+
+		FOnMontageEnded EndDelegate;
+		EndDelegate.BindUObject(this, &ABirdEnemyCharacter::HandleAttackMontageEnded);
+		AnimInstance->Montage_SetEndDelegate(EndDelegate, Tuning.AttackMontage);
+
+		OnAttackStarted.Broadcast(TargetActor);
+		return true;
 	}
 
-	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-	if (!AnimInstance)
-	{
-		return false;
-	}
-
-	const float Duration = AnimInstance->Montage_Play(Tuning.AttackMontage);
-	if (Duration <= 0.f)
-	{
-		return false;
-	}
-
-	AnimState.bIsAttacking = true;
-
-	FOnMontageEnded EndDelegate;
-	EndDelegate.BindUObject(this, &ABirdEnemyCharacter::HandleAttackMontageEnded);
-	AnimInstance->Montage_SetEndDelegate(EndDelegate, Tuning.AttackMontage);
-
+	// Path B: Timer-driven fallback when prototyping without an AnimMontage.
+	StartFallbackAttack();
 	OnAttackStarted.Broadcast(TargetActor);
 	return true;
 }
 
 void ABirdEnemyCharacter::CancelAttack()
 {
+	ClearFallbackAttackTimers();
 	EndAttackHitWindow();
 	AnimState.bIsAttacking = false;
 
@@ -267,6 +333,87 @@ void ABirdEnemyCharacter::CancelAttack()
 		{
 			AnimInstance->Montage_Stop(0.15f, Tuning.AttackMontage);
 		}
+	}
+}
+
+void ABirdEnemyCharacter::StartFallbackAttack()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	ClearFallbackAttackTimers();
+	AnimState.bIsAttacking = true;
+
+	if (Tuning.bDrawDebugTraces && AttackOrigin)
+	{
+		// Cyan sphere telegraphs the wind-up before the strike fires
+		DrawDebugSphere(World, AttackOrigin->GetComponentLocation(), 18.f, 8, FColor::Cyan, false, Tuning.FallbackWindupDuration, 0, 1.5f);
+	}
+
+	if (Tuning.FallbackWindupDuration <= KINDA_SMALL_NUMBER)
+	{
+		HandleFallbackStrikeBegin();
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		FallbackWindupTimerHandle,
+		this,
+		&ABirdEnemyCharacter::HandleFallbackStrikeBegin,
+		Tuning.FallbackWindupDuration,
+		false);
+}
+
+void ABirdEnemyCharacter::HandleFallbackStrikeBegin()
+{
+	UWorld* World = GetWorld();
+	if (!World || !AnimState.bIsAttacking)
+	{
+		return;
+	}
+
+	BeginAttackHitWindow(1.0f);
+	PerformAttackHitTrace(); // Immediate frame-0 sweep
+
+	// Poll at ~33Hz during the brief active window to mirror AnimNotifyState::NotifyTick
+	World->GetTimerManager().SetTimer(
+		FallbackStrikeTickTimerHandle,
+		this,
+		&ABirdEnemyCharacter::HandleFallbackStrikeTick,
+		0.03f,
+		true);
+
+	World->GetTimerManager().SetTimer(
+		FallbackEndTimerHandle,
+		this,
+		&ABirdEnemyCharacter::HandleFallbackAttackEnd,
+		FMath::Max(Tuning.FallbackActiveDuration, 0.05f),
+		false);
+}
+
+void ABirdEnemyCharacter::HandleFallbackStrikeTick()
+{
+	PerformAttackHitTrace();
+}
+
+void ABirdEnemyCharacter::HandleFallbackAttackEnd()
+{
+	ClearFallbackAttackTimers();
+	EndAttackHitWindow();
+	AnimState.bIsAttacking = false; // Signals FBirdAttackTask::Tick to start AttackCooldown
+}
+
+void ABirdEnemyCharacter::ClearFallbackAttackTimers()
+{
+	if (UWorld* World = GetWorld())
+	{
+		FTimerManager& TimerManager = World->GetTimerManager();
+		TimerManager.ClearTimer(FallbackWindupTimerHandle);
+		TimerManager.ClearTimer(FallbackStrikeTickTimerHandle);
+		TimerManager.ClearTimer(FallbackEndTimerHandle);
 	}
 }
 
@@ -300,7 +447,7 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(BirdAttackTrace), false, this);
 	TArray<FHitResult> HitResults;
 
-	const bool bHit = World->SweepMultiByChannel(
+	const bool bBlockingHit = World->SweepMultiByChannel(
 		HitResults,
 		Start,
 		End,
@@ -311,18 +458,26 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 
 	if (Tuning.bDrawDebugTraces)
 	{
-		DrawDebugSphere(World, End, Tuning.AttackTraceRadius, 12, bHit ? FColor::Red : FColor::Green, false, 0.1f);
+		const FColor TraceColor = HitResults.IsEmpty()
+			? FColor::Green
+			: (bBlockingHit ? FColor::Red : FColor::Yellow);
+
+		DrawDebugSphere(World, End, Tuning.AttackTraceRadius, 12, TraceColor, false, 0.1f);
+		DrawDebugLine(World, Start, End, TraceColor, false, 0.1f, 0, 2.0f);
 	}
 
-	if (!bHit)
+	// CRITICAL: Check HitResults.IsEmpty(), NOT !bBlockingHit, so ECC_Pawn overlaps still register
+	if (HitResults.IsEmpty())
 	{
 		return;
 	}
 
+	const FHitFeedbackConfig& FeedbackCfg = Tuning.AttackFeedback;
+
 	for (const FHitResult& Hit : HitResults)
 	{
 		AActor* HitActor = Hit.GetActor();
-		if (!HitActor || HitActorsThisSwing.Contains(HitActor))
+		if (!IsValid(HitActor) || HitActorsThisSwing.Contains(HitActor))
 		{
 			continue;
 		}
@@ -332,14 +487,88 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 			continue;
 		}
 
-		// Record actor so multi-frame NotifyTick hits damage the player only once per swoop.
 		HitActorsThisSwing.Add(HitActor);
 
-		const float FinalDamage = Tuning.BaseDamage * ActiveDamageMultiplier;
+		// Compute knockback pushing the player away from the bird
+		FVector KnockDir = (HitActor->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
+		if (KnockDir.IsNearlyZero())
+		{
+			KnockDir = GetActorForwardVector().GetSafeNormal2D();
+		}
+
+		const FVector KnockbackVel =
+			(KnockDir * FeedbackCfg.KnockbackHorizontalStrength) +
+			FVector(0.0f, 0.0f, FeedbackCfg.KnockbackVerticalStrength);
+
+		FCombatHitPayload Payload;
+		Payload.InstigatorActor = this;
+		Payload.DamageCauser = this;
+		Payload.TargetActor = HitActor;
+		Payload.ImpactPoint = Hit.ImpactPoint.IsNearlyZero() ? End : Hit.ImpactPoint;
+		Payload.ImpactNormal = Hit.ImpactNormal;
+		Payload.KnockbackDirection = KnockDir;
+		Payload.KnockbackVelocity = KnockbackVel;
+		Payload.HeartDamage = FMath::Max(1, FMath::RoundToInt(FeedbackCfg.HeartDamage * ActiveDamageMultiplier));
+		Payload.StaggerDuration = FeedbackCfg.StaggerDuration;
+		Payload.AppliedHitStopDuration = FeedbackCfg.HitStopDuration;
+		Payload.HitResult = Hit;
+
+		FCombatHitResponse HitResponse;
+		bool bHandledByHealthComp = false;
+
+		if (IHitReactableInterface* Reactable = Cast<IHitReactableInterface>(HitActor))
+		{
+			HitResponse = Reactable->ReceiveCombatHit(Payload);
+			bHandledByHealthComp = true;
+		}
+		else if (UHeartHealthComponent* TargetHealth = HitActor->FindComponentByClass<UHeartHealthComponent>())
+		{
+			HitResponse = TargetHealth->ApplyCombatHit(Payload);
+			bHandledByHealthComp = true;
+		}
+
+		// Respect Player i-frames (no HitStop or double damage while invulnerable)
+		if (bHandledByHealthComp && !HitResponse.bHitAccepted)
+		{
+			if (Tuning.bDrawDebugTraces)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[BirdAttack] %s ignored hit (i-frames or dead)."), *GetNameSafe(HitActor));
+			}
+			continue;
+		}
+
+		if (bHandledByHealthComp)
+		{
+			Payload.RemainingHearts = HitResponse.RemainingHearts;
+			Payload.MaxHearts = HitResponse.MaxHearts;
+			Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
+			Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
+				? FeedbackCfg.KillHitStopDuration
+				: FeedbackCfg.HitStopDuration;
+
+			if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
+			{
+				FeedbackSub->TriggerCombatFeedback(Payload, FeedbackCfg);
+			}
+		}
+
+		// Keep standard UE5 Event AnyDamage working alongside UHeartHealthComponent
+		const float FinalDamage = bHandledByHealthComp
+			? static_cast<float>(Payload.HeartDamage)
+			: (Tuning.BaseDamage * ActiveDamageMultiplier);
+
 		UGameplayStatics::ApplyDamage(HitActor, FinalDamage, GetController(), this, UDamageType::StaticClass());
 
 		OnAttackHit.Broadcast(HitActor, FinalDamage);
 		BP_OnAttackHit(HitActor, FinalDamage);
+
+		if (Tuning.bDrawDebugTraces && GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1, 2.0f, FColor::Red,
+				FString::Printf(TEXT("[BirdAttack] Hit %s for %.0f | Hearts Left: %d/%d"),
+					*GetNameSafe(HitActor), FinalDamage, Payload.RemainingHearts, Payload.MaxHearts));
+		}
 	}
 }
 

@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CombatFeedbackTypes.h"
 #include "BirdEnemyTypes.generated.h"
 
 class UAnimMontage;
@@ -89,6 +90,18 @@ struct FBirdEnemyTuning
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Debug")
     bool bDrawDebugTraces = false;
+
+    /** knockback, HitStop, and camera shake applied when this bird hits the player. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|BOTWFeedback")
+    FHitFeedbackConfig AttackFeedback;
+    
+    /** Telegraph delay (seconds) before the hitbox activates when AttackMontage is unassigned. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Fallback", meta = (ClampMin = "0.0", Units = "s"))
+    float FallbackWindupDuration = 0.25f;
+
+    /** Active hit-trace window (seconds) when AttackMontage is unassigned. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Fallback", meta = (ClampMin = "0.05", Units = "s"))
+    float FallbackActiveDuration = 0.15f;
 };
 
 /** Thread-safe snapshot updated every tick for Animation Blueprints (BlendSpaces, Banking, State transitions). */

@@ -4,11 +4,13 @@
 #include "CoreMinimal.h"
 #include "AIController.h"
 #include "Perception/AIPerceptionTypes.h"
+#include "CombatFeedbackTypes.h"
 #include "BirdAIController.generated.h"
 
 class UAIPerceptionComponent;
 class UAISenseConfig_Sight;
 class UStateTreeAIComponent;
+class UDamageType;
 
 UCLASS(Blueprintable)
 class WS_TOKOBOTDOFUS_API ABirdAIController : public AAIController
@@ -19,6 +21,7 @@ public:
 	ABirdAIController();
 
 	virtual void OnPossess(APawn* InPawn) override;
+	virtual void OnUnPossess() override;
 
 	UFUNCTION(BlueprintPure, Category = "Bird|AI")
 	AActor* GetTargetActor() const { return TargetActor.Get(); }
@@ -46,7 +49,21 @@ private:
 	UFUNCTION()
 	void HandleTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 
+	UFUNCTION()
+	void HandlePawnCombatHit(const FCombatHitPayload& HitPayload);
+
+	UFUNCTION()
+	void HandlePawnTakeAnyDamage(
+		AActor* DamagedActor,
+		float Damage,
+		const UDamageType* DamageType,
+		AController* InstigatedBy,
+		AActor* DamageCauser);
+
+	void TryAggroFromAttacker(AActor* AttackerActor);
 	void ApplySightConfigFromPawn(APawn* InPawn);
+	void BindPawnDamageEvents(APawn* InPawn);
+	void UnbindPawnDamageEvents(APawn* InPawn);
 
 	TWeakObjectPtr<AActor> TargetActor;
 	FVector SpawnLocation = FVector::ZeroVector;

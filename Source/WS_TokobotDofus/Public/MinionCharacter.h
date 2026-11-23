@@ -9,6 +9,7 @@
 class AAIController;
 class AMinionAIController;
 class ANavLinkProxy;
+class UMinionThrowTargetComponent;
 
 /**
  * Self-contained Minion Character with zero-push collision, player evasion,
@@ -30,6 +31,41 @@ public:
 	virtual void SetWhipModeEnabled(bool bEnabled) override;
 	virtual void SetCarryRushModeEnabled(bool bEnabled) override;
 	// ~End IMinionAgentInterface
+	
+	virtual void Tick(float DeltaTime) override;
+
+	virtual bool LaunchAtThrowTarget(
+		UMinionThrowTargetComponent* TargetComp,
+		int32 ReservedSlotIndex,
+		const FVector& LaunchOrigin,
+		float FlightSpeed,
+		float ArcHeight,
+		AActor* ThrowInstigator) override;
+
+	virtual void ConfirmLatchedToThrowTarget(UMinionThrowTargetComponent* TargetComp, int32 SlotIndex) override;
+	virtual void DetachFromThrowTarget(const FVector& PopVelocity, bool bSnapWithoutPop = false) override;
+	virtual UMinionThrowTargetComponent* GetActiveThrowTarget() const override { return ActiveThrowTarget.Get(); }
+
+	virtual bool HasInteractableWaitAnchor() const override { return bHasInteractableWaitAnchor; }
+	virtual FVector GetInteractableWaitAnchor() const override { return InteractableWaitAnchor; }
+	virtual void ClearInteractableWaitAnchor() override { bHasInteractableWaitAnchor = false; }
+
+	// Inside private: section of AMinionCharacter
+	void CompleteThrowBounceRecovery();
+
+	TWeakObjectPtr<UMinionThrowTargetComponent> ActiveThrowTarget;
+	TWeakObjectPtr<AActor> ThrowInstigatorActor;
+	int32 ReservedThrowSlotIndex = INDEX_NONE;
+	FVector ThrowStartLocation = FVector::ZeroVector;
+	float ThrowFlightDuration = 0.25f;
+	float ThrowFlightElapsed = 0.0f;
+	float ThrowArcHeight = 140.0f;
+
+	bool bIsRecoveringFromThrowBounce = false;
+	FTimerHandle ThrowBounceSafetyTimerHandle;
+
+	bool bHasInteractableWaitAnchor = false;
+	FVector InteractableWaitAnchor = FVector::ZeroVector;
 
 protected:
 	virtual void BeginPlay() override;
