@@ -499,14 +499,26 @@ bool AMinionCharacter::LaunchAtThrowTarget(
 	ThrowInstigatorActor = ThrowInstigator;
 	ReservedThrowSlotIndex = ReservedSlotIndex;
 
-	ThrowStartLocation = LaunchOrigin;
-	SetActorLocation(ThrowStartLocation, false, nullptr, ETeleportType::TeleportPhysics);
+	ThrowStartLocation = GetActorLocation(); // No hard teleport to player hand!
 
 	const FVector TargetGoal = TargetComp->GetSlotWorldLocation(ReservedSlotIndex);
 	const float InitialDist = FVector::Dist(ThrowStartLocation, TargetGoal);
-	ThrowFlightDuration = FMath::Clamp(InitialDist / FMath::Max(FlightSpeed, 300.0f), 0.14f, 0.55f);
+
+	// Distance-scaled arc: close throws stay snappy darts; long throws keep a readable parabola
+	const float EffectiveArc = FMath::Clamp(InitialDist * 0.14f, 18.0f, ArcHeight);
+	const FVector MidPoint = FMath::Lerp(ThrowStartLocation, TargetGoal, 0.45f);
+	// Pull control point slightly toward the player's launch shoulder so the minion visibly whips past the player
+	ThrowControlPoint = FMath::Lerp(MidPoint, LaunchOrigin, 0.35f) + FVector(0.0f, 0.0f, EffectiveArc);
+
+	ThrowFlightDuration = FMath::Clamp(InitialDist / FMath::Max(FlightSpeed, 300.0f), 0.11f, 0.48f);
 	ThrowFlightElapsed = 0.0f;
-	ThrowArcHeight = ArcHeight;
+	ThrowArcHeight = EffectiveArc;
+
+	if (SquashStretchComp)
+	{
+		// Quick launch pop stretch along forward flight axis
+		SquashStretchComp->TriggerImpactAftershock(6.5f, FVector::ForwardVector, 0.16f);
+	}
 
 	CurrentState = EMinionState::InThrowFlight;
 	SetActorTickEnabled(true);
@@ -530,22 +542,35 @@ void AMinionCharacter::Tick(float DeltaTime)
 		DetachFromThrowTarget(FVector(0.0f, 0.0f, 120.0f), false);
 		return;
 	}
-
 	ThrowFlightElapsed += DeltaTime;
-	const float Alpha = FMath::Clamp(ThrowFlightElapsed / FMath::Max(ThrowFlightDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+	const float RawAlpha = FMath::Clamp(ThrowFlightElapsed / FMath::Max(ThrowFlightDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+
+	// Slight ease-in accelerates into the impact so sudden-stop inertia feels weighty
+	const float T = FMath::Pow(RawAlpha, 1.22f);
+	const float InvT = 1.0f - T;
 
 	const FVector LiveGoal = TargetComp->GetSlotWorldLocation(ReservedThrowSlotIndex);
-	FVector NewPos = FMath::Lerp(ThrowStartLocation, LiveGoal, Alpha);
-	NewPos.Z += 4.0f * ThrowArcHeight * Alpha * (1.0f - Alpha);
+	// Quadratic Bezier: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+	const FVector PrevPos = GetActorLocation();
+	const FVector NewPos =
+		(InvT * InvT * ThrowStartLocation) +
+		(2.0f * InvT * T * ThrowControlPoint) +
+		(T * T * LiveGoal);
 
-	const FVector StepDir = (NewPos - GetActorLocation()).GetSafeNormal();
-	const FRotator NewRot = StepDir.IsNearlyZero() ? GetActorRotation() : StepDir.Rotation();
+	const FVector StepDelta = NewPos - PrevPos;
+	const float InstantSpeed = (DeltaTime > KINDA_SMALL_NUMBER) ? (StepDelta.Size() / DeltaTime) : 0.0f;
+	const FRotator NewRot = StepDelta.IsNearlyZero() ? GetActorRotation() : StepDelta.GetSafeNormal().Rotation();
 	SetActorLocationAndRotation(NewPos, NewRot, false, nullptr, ETeleportType::TeleportPhysics);
 
-	if (Alpha >= 1.0f)
+	if (SquashStretchComp)
+	{
+		SquashStretchComp->SetSpeedStretch(InstantSpeed, FVector::ForwardVector);
+	}
+
+	if (RawAlpha >= 1.0f)
 	{
 		SetActorTickEnabled(false);
-		const FVector ImpactDir = (LiveGoal - ThrowStartLocation).GetSafeNormal();
+		const FVector ImpactDir = (LiveGoal - ThrowControlPoint).GetSafeNormal();
 		TargetComp->NotifyMinionArrived(this, ReservedThrowSlotIndex, ImpactDir, ThrowInstigatorActor.Get());
 	}
 }
@@ -566,6 +591,12 @@ void AMinionCharacter::ConfirmLatchedToThrowTarget(UMinionThrowTargetComponent* 
 	AttachToComponent(TargetComp, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	const FTransform SlotWorld = TargetComp->GetSlotWorldTransform(SlotIndex);
 	SetActorLocationAndRotation(SlotWorld.GetLocation(), SlotWorld.GetRotation().Rotator(), false, nullptr, ETeleportType::TeleportPhysics);
+
+	if (SquashStretchComp)
+	{
+		// Slam squash along forward impact axis -> spring oscillates 2-3 times and settles
+		SquashStretchComp->TriggerImpactAftershock(-10.5f, FVector::ForwardVector, -0.28f);
+	}
 }
 
 void AMinionCharacter::DetachFromThrowTarget(const FVector& PopVelocity, bool bSnapWithoutPop)
@@ -669,4 +700,10 @@ void AMinionCharacter::CompleteThrowBounceRecovery()
 
 	CurrentState = EMinionState::Idle;
 	LastIssuedMoveTarget = FVector::ZeroVector;
+	
+	if (SquashStretchComp)
+	{
+		// Vertical landing squash along UpVector
+		SquashStretchComp->TriggerImpactAftershock(-7.5f, FVector::UpVector, -0.20f);
+	}
 }
