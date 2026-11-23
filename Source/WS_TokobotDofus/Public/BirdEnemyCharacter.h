@@ -33,6 +33,8 @@ public:
 #endif
     
     virtual FCombatHitResponse ReceiveCombatHit(const FCombatHitPayload& HitPayload) override;
+    
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UFUNCTION(BlueprintPure, Category = "Bird|Combat")
     UHeartHealthComponent* GetHealthComponent() const { return HealthComp; }
@@ -109,10 +111,15 @@ private:
     void UpdateHoverAndAnimTelemetry(float DeltaTime);
     void HandleAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
     
-    void HandleFallbackAttackHit();
-    void HandleFallbackAttackEnded();
 
-    FTimerHandle FallbackHitTimerHandle;
+    void StartFallbackAttack();
+    void HandleFallbackStrikeBegin();
+    void HandleFallbackStrikeTick();
+    void HandleFallbackAttackEnd();
+    void ClearFallbackAttackTimers();
+
+    FTimerHandle FallbackWindupTimerHandle;
+    FTimerHandle FallbackStrikeTickTimerHandle;
     FTimerHandle FallbackEndTimerHandle;
 
     float SmoothedHoverWorldZ = 0.f;

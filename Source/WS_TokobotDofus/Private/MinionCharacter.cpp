@@ -9,12 +9,14 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "MinionThrowTargetComponent.h"
 #include "TimerManager.h"
 
 AMinionCharacter::AMinionCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
-
+	PrimaryActorTick.bStartWithTickEnabled = false;
+	
 	AIControllerClass = AMinionAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
@@ -242,7 +244,11 @@ bool AMinionCharacter::MoveToSquadSlot(const FVector& ProjectedSlotLocation)
 	if (CurrentState == EMinionState::EvadingPlayer ||
 		CurrentState == EMinionState::TraversingNavLink ||
 		CurrentState == EMinionState::InAttackWhip ||
-		CurrentState == EMinionState::InCarryRush)
+		CurrentState == EMinionState::InCarryRush ||
+		CurrentState == EMinionState::InThrowFlight ||
+		CurrentState == EMinionState::LatchedToTarget ||
+		bIsRecoveringFromThrowBounce
+		)
 	{
 		return true;
 	}
@@ -297,7 +303,11 @@ void AMinionCharacter::EvadePlayer(const FVector& PlayerLocation, const FVector&
 {
 	if (CurrentState == EMinionState::TraversingNavLink ||
 		CurrentState == EMinionState::InAttackWhip ||
-		CurrentState == EMinionState::InCarryRush)
+		CurrentState == EMinionState::InCarryRush ||
+		CurrentState == EMinionState::InThrowFlight ||
+		CurrentState == EMinionState::LatchedToTarget ||
+		bIsRecoveringFromThrowBounce
+		)
 	{
 		return;
 	}
@@ -355,7 +365,7 @@ void AMinionCharacter::FinishEvadingPlayer()
 
 void AMinionCharacter::ExecuteNavLinkJump(ANavLinkProxy* NavLink, const FVector& LaunchVelocity)
 {
-	if (CurrentState == EMinionState::InAttackWhip || CurrentState == EMinionState::InCarryRush)
+	if (CurrentState == EMinionState::InAttackWhip || CurrentState == EMinionState::InCarryRush || CurrentState == EMinionState::InThrowFlight || CurrentState == EMinionState::LatchedToTarget || bIsRecoveringFromThrowBounce)
 	{
 		return;
 	}
@@ -405,6 +415,10 @@ void AMinionCharacter::Landed(const FHitResult& Hit)
 	{
 		CompleteNavLinkTraversal();
 	}
+	else if (bIsRecoveringFromThrowBounce)
+	{
+		CompleteThrowBounceRecovery();
+	}
 }
 
 void AMinionCharacter::CompleteNavLinkTraversal()
@@ -428,4 +442,231 @@ void AMinionCharacter::CompleteNavLinkTraversal()
 	CurrentState = EMinionState::Idle;
 	LastIssuedMoveTarget = FVector::ZeroVector;
 	MoveToSquadSlot(CachedSquadSlotLocation);
+}
+
+bool AMinionCharacter::LaunchAtThrowTarget(
+	UMinionThrowTargetComponent* TargetComp,
+	int32 ReservedSlotIndex,
+	const FVector& LaunchOrigin,
+	float FlightSpeed,
+	float ArcHeight,
+	AActor* ThrowInstigator)
+{
+	if (!IsValid(TargetComp) ||
+		CurrentState == EMinionState::InAttackWhip ||
+		CurrentState == EMinionState::InCarryRush ||
+		CurrentState == EMinionState::InThrowFlight ||
+		CurrentState == EMinionState::LatchedToTarget)
+	{
+		return false;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(EvadeTimerHandle);
+		World->GetTimerManager().ClearTimer(NavLinkSafetyTimerHandle);
+		World->GetTimerManager().ClearTimer(ThrowBounceSafetyTimerHandle);
+	}
+
+	bIsRecoveringFromThrowBounce = false;
+	bHasInteractableWaitAnchor = false;
+
+	if (AAIController* AICon = EnsureAIController())
+	{
+		AICon->StopMovement();
+		if (AMinionAIController* CrowdCon = Cast<AMinionAIController>(AICon))
+		{
+			CrowdCon->SetCrowdSteeringEnabled(false);
+		}
+	}
+
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->StopMovementImmediately();
+		MoveComp->DisableMovement();
+	}
+
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		if (Capsule->IsSimulatingPhysics())
+		{
+			Capsule->SetSimulatePhysics(false);
+		}
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	ActiveThrowTarget = TargetComp;
+	ThrowInstigatorActor = ThrowInstigator;
+	ReservedThrowSlotIndex = ReservedSlotIndex;
+
+	ThrowStartLocation = LaunchOrigin;
+	SetActorLocation(ThrowStartLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+	const FVector TargetGoal = TargetComp->GetSlotWorldLocation(ReservedSlotIndex);
+	const float InitialDist = FVector::Dist(ThrowStartLocation, TargetGoal);
+	ThrowFlightDuration = FMath::Clamp(InitialDist / FMath::Max(FlightSpeed, 300.0f), 0.14f, 0.55f);
+	ThrowFlightElapsed = 0.0f;
+	ThrowArcHeight = ArcHeight;
+
+	CurrentState = EMinionState::InThrowFlight;
+	SetActorTickEnabled(true);
+	return true;
+}
+
+void AMinionCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (CurrentState != EMinionState::InThrowFlight)
+	{
+		SetActorTickEnabled(false);
+		return;
+	}
+
+	UMinionThrowTargetComponent* TargetComp = ActiveThrowTarget.Get();
+	if (!IsValid(TargetComp) || !TargetComp->IsTargetable())
+	{
+		// Target was destroyed or disabled mid-flight: drop cleanly to the ground
+		DetachFromThrowTarget(FVector(0.0f, 0.0f, 120.0f), false);
+		return;
+	}
+
+	ThrowFlightElapsed += DeltaTime;
+	const float Alpha = FMath::Clamp(ThrowFlightElapsed / FMath::Max(ThrowFlightDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+
+	const FVector LiveGoal = TargetComp->GetSlotWorldLocation(ReservedThrowSlotIndex);
+	FVector NewPos = FMath::Lerp(ThrowStartLocation, LiveGoal, Alpha);
+	NewPos.Z += 4.0f * ThrowArcHeight * Alpha * (1.0f - Alpha);
+
+	const FVector StepDir = (NewPos - GetActorLocation()).GetSafeNormal();
+	const FRotator NewRot = StepDir.IsNearlyZero() ? GetActorRotation() : StepDir.Rotation();
+	SetActorLocationAndRotation(NewPos, NewRot, false, nullptr, ETeleportType::TeleportPhysics);
+
+	if (Alpha >= 1.0f)
+	{
+		SetActorTickEnabled(false);
+		const FVector ImpactDir = (LiveGoal - ThrowStartLocation).GetSafeNormal();
+		TargetComp->NotifyMinionArrived(this, ReservedThrowSlotIndex, ImpactDir, ThrowInstigatorActor.Get());
+	}
+}
+
+void AMinionCharacter::ConfirmLatchedToThrowTarget(UMinionThrowTargetComponent* TargetComp, int32 SlotIndex)
+{
+	if (!IsValid(TargetComp))
+	{
+		DetachFromThrowTarget(FVector::ZeroVector, false);
+		return;
+	}
+
+	CurrentState = EMinionState::LatchedToTarget;
+	ActiveThrowTarget = TargetComp;
+	ReservedThrowSlotIndex = SlotIndex;
+	SetActorTickEnabled(false);
+
+	AttachToComponent(TargetComp, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	const FTransform SlotWorld = TargetComp->GetSlotWorldTransform(SlotIndex);
+	SetActorLocationAndRotation(SlotWorld.GetLocation(), SlotWorld.GetRotation().Rotator(), false, nullptr, ETeleportType::TeleportPhysics);
+}
+
+void AMinionCharacter::DetachFromThrowTarget(const FVector& PopVelocity, bool bSnapWithoutPop)
+{
+	SetActorTickEnabled(false);
+
+	const FVector DetachReferenceLoc = ActiveThrowTarget.IsValid()
+		? ActiveThrowTarget->GetComponentLocation()
+		: GetActorLocation();
+
+	DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+	ActiveThrowTarget.Reset();
+	ThrowInstigatorActor.Reset();
+	ReservedThrowSlotIndex = INDEX_NONE;
+
+	// Remember the interactable's NavMesh anchor so if the player has no path here,
+	// this minion stays grouped around the interactable instead of trying to run to an unreachable takeoff spot.
+	if (!bSnapWithoutPop)
+	{
+		bHasInteractableWaitAnchor = true;
+		InteractableWaitAnchor = DetachReferenceLoc;
+
+		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+		{
+			FNavLocation Projected;
+			if (NavSys->ProjectPointToNavigation(DetachReferenceLoc, Projected, FVector(250.0f, 250.0f, 500.0f)))
+			{
+				InteractableWaitAnchor = Projected.Location;
+			}
+		}
+	}
+	else
+	{
+		bHasInteractableWaitAnchor = false;
+	}
+
+	SetActorRotation(FRotator(0.0f, GetActorRotation().Yaw, 0.0f));
+
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	}
+
+	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
+	if (MoveComp)
+	{
+		MoveComp->StopMovementImmediately();
+		MoveComp->SetMovementMode(MOVE_Walking);
+	}
+
+	if (!bSnapWithoutPop && !PopVelocity.IsNearlyZero())
+	{
+		bIsRecoveringFromThrowBounce = true;
+		CurrentState = EMinionState::Idle;
+		LaunchCharacter(PopVelocity, true, true);
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				ThrowBounceSafetyTimerHandle,
+				this,
+				&AMinionCharacter::CompleteThrowBounceRecovery,
+				2.0f,
+				false);
+		}
+	}
+	else
+	{
+		CompleteThrowBounceRecovery();
+	}
+}
+
+void AMinionCharacter::CompleteThrowBounceRecovery()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ThrowBounceSafetyTimerHandle);
+	}
+
+	bIsRecoveringFromThrowBounce = false;
+
+	// Refresh local wait anchor to actual landing NavMesh position if still holding near an interactable
+	if (bHasInteractableWaitAnchor)
+	{
+		InteractableWaitAnchor = GetActorLocation();
+		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+		{
+			FNavLocation Projected;
+			if (NavSys->ProjectPointToNavigation(GetActorLocation(), Projected, FVector(200.0f, 200.0f, 350.0f)))
+			{
+				InteractableWaitAnchor = Projected.Location;
+			}
+		}
+	}
+
+	if (AMinionAIController* CrowdCon = Cast<AMinionAIController>(EnsureAIController()))
+	{
+		CrowdCon->SetCrowdSteeringEnabled(true);
+	}
+
+	CurrentState = EMinionState::Idle;
+	LastIssuedMoveTarget = FVector::ZeroVector;
 }

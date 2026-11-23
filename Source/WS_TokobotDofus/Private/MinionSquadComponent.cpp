@@ -20,6 +20,7 @@
 #include "HitReactableInterface.h"
 #include "HitFeedbackSubsystem.h"
 #include "HeartHealthComponent.h"
+#include "MinionThrowTargetComponent.h"
 #include "NavFilters/NavigationQueryFilter.h"
 
 // ============================================================================
@@ -128,31 +129,39 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 	const bool bPlayerGroundedOnNav = Squad->IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc);
 
 	TArray<int32, TInlineAllocator<16>> ReachableIndices;
-	TArray<int32, TInlineAllocator<16>> StrandedIndices;
+	TArray<int32, TInlineAllocator<16>> StrandedAtTakeoffIndices;
+	TArray<int32, TInlineAllocator<16>> StrandedAtInteractableIndices;
 
 	for (int32 i = 0; i < MinionCount; ++i)
 	{
 		IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[i].GetInterface();
 		if (!MinionInterface) continue;
 
-		// Skip the minion currently attached to the player during a mid-air Carry Jump
-		if (MinionInterface->GetMinionState() == EMinionState::InCarryRush)
+		const EMinionState State = MinionInterface->GetMinionState();
+		if (State == EMinionState::InCarryRush ||
+			State == EMinionState::InThrowFlight ||
+			State == EMinionState::LatchedToTarget)
 		{
 			continue;
 		}
 
 		if (bPlayerGroundedOnNav && Squad->CanMinionReachNavLocation(Squad->ActiveMinions[i], NavSys, PlayerNavLoc))
 		{
+			MinionInterface->ClearInteractableWaitAnchor();
 			ReachableIndices.Add(i);
+		}
+		else if (MinionInterface->HasInteractableWaitAnchor())
+		{
+			StrandedAtInteractableIndices.Add(i);
 		}
 		else
 		{
-			StrandedIndices.Add(i);
+			StrandedAtTakeoffIndices.Add(i);
 		}
 	}
 
-	// Only move the shared WaitingGroupAnchorTransform when ALL non-carried minions can reach the player
-	if (StrandedIndices.IsEmpty() && !ReachableIndices.IsEmpty())
+	// Only move the shared WaitingGroupAnchorTransform when ALL non-carried, non-thrown minions can reach the player
+	if (StrandedAtTakeoffIndices.IsEmpty() && StrandedAtInteractableIndices.IsEmpty() && !ReachableIndices.IsEmpty())
 	{
 		WaitingGroupAnchorTransform = Squad->GetComponentTransform();
 	}
@@ -270,7 +279,27 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 	AssignGroupToAnchor(ReachableIndices, LivePlayerAnchor, FColor::Green, bAnchorMoved);
 
 	// 3. Command stranded minions to stay grouped around the takeoff WaitingGroupAnchorTransform
-	AssignGroupToAnchor(StrandedIndices, WaitingGroupAnchorTransform, FColor::Blue, false);
+	AssignGroupToAnchor(StrandedAtTakeoffIndices, WaitingGroupAnchorTransform, FColor::Blue, false);
+	
+	// 4. Keep detached minions with no path to the player waiting neatly around their interactable object
+	for (int32 SquadIdx : StrandedAtInteractableIndices)
+	{
+		AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
+		IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
+		if (!MinionActor || !MinionInterface) continue;
+
+		const FVector AnchorPos = MinionInterface->GetInteractableWaitAnchor();
+		if (Squad->bDebugDrawSlots)
+		{
+			DrawDebugSphere(World, AnchorPos, 18.0f, 8, FColor::Orange, false, Squad->UpdateInterval * 1.1f);
+			DrawDebugLine(World, MinionActor->GetActorLocation(), AnchorPos, FColor::Orange, false, Squad->UpdateInterval * 1.1f, 0, 1.5f);
+		}
+
+		if (FVector::DistSquared2D(MinionActor->GetActorLocation(), AnchorPos) > FMath::Square(85.0f))
+		{
+			MinionInterface->MoveToSquadSlot(AnchorPos);
+		}
+	}
 }
 
 // ============================================================================
@@ -780,7 +809,7 @@ void UMinionStance_ChaosWhip::TickStance(float DeltaTime)
 				MinionPrim->AddForce(TotalAccel, NAME_None, true);
 
 				const float Speed2D = PhysicsVel.Size2D();
-				if (bAnySpinActive || Speed2D >= Cfg.MinPhysicsSpeedForDamage)
+				if (bAnySpinActive)
 				{
 					Squad->PerformWhipHitSweep(MinionActor, LinkIndexInArm, PrevMinionLocations[i], CurrentLoc);
 				}
@@ -1304,7 +1333,7 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 		FCollisionShape::MakeSphere(Cfg.RamHitboxRadius),
 		QueryParams);
 
-	if (!bHit) return;
+	if (HitResults.IsEmpty()) return;
 
 	UPrimitiveComponent* PlayerRoot = Cast<UPrimitiveComponent>(PlayerActor->GetRootComponent());
 	const double CurrentTime = World->GetTimeSeconds();
@@ -1719,6 +1748,19 @@ bool UMinionSquadComponent::CanMinionReachNavLocation(
 	UNavigationSystemV1* NavSys,
 	const FVector& TargetNavLoc) const
 {
+	if (const IMinionAgentInterface* MinionInterface = Cast<IMinionAgentInterface>(MinionActor))
+	{
+		const EMinionState State = MinionInterface->GetMinionState();
+		if (State == EMinionState::InThrowFlight || State == EMinionState::LatchedToTarget)
+		{
+			return false;
+		}
+		if (State == EMinionState::InAttackWhip || State == EMinionState::InCarryRush)
+		{
+			return true;
+		}
+	}	
+	
 	if (!IsValid(MinionActor) || !NavSys) return false;
 
 	// If the minion is already actively attached to the Whip or Carry palanquin right next to the player, count it as reachable
@@ -2108,15 +2150,256 @@ bool UMinionSquadComponent::RegisterMinion(AActor* MinionActor)
 	return true;
 }
 
+bool UMinionSquadComponent::CanWorldLocationReachPlayer(const FVector& WorldLocation) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	FVector PlayerNavLoc = FVector::ZeroVector;
+	if (!IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc))
+	{
+		return false;
+	}
+
+	ANavigationData* NavData = NavSys->GetDefaultNavDataInstance();
+	if (!NavData)
+	{
+		return false;
+	}
+
+	FNavLocation StartNav;
+	if (!NavSys->ProjectPointToNavigation(WorldLocation, StartNav, FVector(250.0f, 250.0f, 500.0f), NavData))
+	{
+		return false;
+	}
+
+	FSharedConstNavQueryFilter QueryFilter = UNavigationQueryFilter::GetQueryFilter(*NavData, GetOwner(), nullptr);
+	FPathFindingQuery PathQuery(GetOwner(), *NavData, StartNav.Location, PlayerNavLoc, QueryFilter);
+	PathQuery.SetAllowPartialPaths(false);
+
+	return NavSys->TestPathSync(PathQuery, EPathFindingMode::Regular);
+}
+
+AActor* UMinionSquadComponent::FindBestThrowableMinion(const FVector& ReferenceOrigin, float MaxGrabDistance) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	FVector PlayerNavLoc = FVector::ZeroVector;
+	const bool bPlayerGrounded = IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc);
+	const float MaxGrabDistSq = FMath::Square(MaxGrabDistance);
+	const float CloseGrabBypassSq = FMath::Square(350.0f);
+
+	AActor* BestMinion = nullptr;
+	float BestDistSq = MAX_flt;
+
+	for (int32 i = 0; i < ActiveMinions.Num(); ++i)
+	{
+		AActor* Candidate = ActiveMinions[i];
+		if (!IsValid(Candidate) || !ActiveMinionInterfaces.IsValidIndex(i))
+		{
+			continue;
+		}
+
+		IMinionAgentInterface* MinionInterface = ActiveMinionInterfaces[i].GetInterface();
+		if (!MinionInterface)
+		{
+			continue;
+		}
+
+		const EMinionState State = MinionInterface->GetMinionState();
+		if (State != EMinionState::Idle && State != EMinionState::Following)
+		{
+			continue;
+		}
+
+		const float DistSq = FVector::DistSquared(Candidate->GetActorLocation(), ReferenceOrigin);
+		if (DistSq > MaxGrabDistSq)
+		{
+			continue;
+		}
+
+		// When player is grounded, require reachability (unless minion is right beside them);
+		// when player is mid-air, allow grabbing any nearby Idle/Following minion for responsive jump-throws.
+		if (bPlayerGrounded && DistSq > CloseGrabBypassSq && !CanMinionReachNavLocation(Candidate, NavSys, PlayerNavLoc))
+		{
+			continue;
+		}
+
+		if (DistSq < BestDistSq)
+		{
+			BestDistSq = DistSq;
+			BestMinion = Candidate;
+		}
+	}
+
+	return BestMinion;
+}
+
+int32 UMinionSquadComponent::RecallThrownMinions(bool bOnlyDetachIfReachable)
+{
+	PruneInvalidMinions();
+
+	int32 RecalledCount = 0;
+	for (int32 i = 0; i < ActiveMinions.Num(); ++i)
+	{
+		AActor* MinionActor = ActiveMinions[i];
+		IMinionAgentInterface* MinionInterface = ActiveMinionInterfaces[i].GetInterface();
+		if (!MinionActor || !MinionInterface)
+		{
+			continue;
+		}
+
+		const EMinionState State = MinionInterface->GetMinionState();
+		if (State != EMinionState::LatchedToTarget && State != EMinionState::InThrowFlight)
+		{
+			continue;
+		}
+
+		UMinionThrowTargetComponent* ThrowTarget = MinionInterface->GetActiveThrowTarget();
+		if (bOnlyDetachIfReachable)
+		{
+			const FVector CheckOrigin = IsValid(ThrowTarget) ? ThrowTarget->GetComponentLocation() : MinionActor->GetActorLocation();
+			if (!CanWorldLocationReachPlayer(CheckOrigin))
+			{
+				// No valid path back to player: stay at the interactable until player has a path or hits a checkpoint
+				continue;
+			}
+		}
+
+		if (IsValid(ThrowTarget))
+		{
+			ThrowTarget->ReleaseMinion(MinionActor, FVector::ZeroVector, false);
+		}
+		else
+		{
+			MinionInterface->DetachFromThrowTarget(FVector(0.0f, 0.0f, 220.0f), false);
+		}
+
+		++RecalledCount;
+	}
+
+	if (CurrentStance == EMinionSquadStance::Follow && FollowStanceInstance)
+	{
+		FollowStanceInstance->ForceImmediateEvaluation();
+	}
+
+	if (RecalledCount > 0)
+	{
+		BroadcastDebug(FString::Printf(TEXT("Recalled %d thrown minion(s)."), RecalledCount), FColor::Cyan, 1.5f);
+	}
+
+	return RecalledCount;
+}
+
+void UMinionSquadComponent::ResetMinionsToPlayerCheckpoint(bool bDetachFromInteractables)
+{
+	UWorld* World = GetWorld();
+	AActor* PlayerActor = GetOwner();
+	if (!World || !PlayerActor)
+	{
+		return;
+	}
+
+	// Return to Follow stance first so any active Whip/CarryRush state releases cleanly
+	if (CurrentStance != EMinionSquadStance::Follow)
+	{
+		SetSquadStance(EMinionSquadStance::Follow);
+	}
+
+	const int32 MinionCount = PruneInvalidMinions();
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	const FVector NavExtent(250.0f, 250.0f, 500.0f);
+
+	for (int32 i = 0; i < MinionCount; ++i)
+	{
+		AActor* MinionActor = ActiveMinions[i];
+		IMinionAgentInterface* MinionInterface = ActiveMinionInterfaces[i].GetInterface();
+		if (!MinionActor || !MinionInterface)
+		{
+			continue;
+		}
+
+		// 1. Cleanly remove minion from any affected interactable object (fires OnMinionDetached & resets door/slow states)
+		if (bDetachFromInteractables)
+		{
+			if (UMinionThrowTargetComponent* ThrowTarget = MinionInterface->GetActiveThrowTarget())
+			{
+				ThrowTarget->ReleaseMinion(MinionActor, FVector::ZeroVector, true);
+			}
+			else if (MinionInterface->GetMinionState() == EMinionState::InThrowFlight ||
+					 MinionInterface->GetMinionState() == EMinionState::LatchedToTarget)
+			{
+				MinionInterface->DetachFromThrowTarget(FVector::ZeroVector, true);
+			}
+		}
+
+		MinionInterface->ClearInteractableWaitAnchor();
+
+		// 2. Teleport cleanly onto the minion's NavMesh formation slot behind the player
+		FVector TargetSlot = CalculateSlotWorldLocation(i);
+		if (NavSys)
+		{
+			FNavLocation Projected;
+			if (NavSys->ProjectPointToNavigation(TargetSlot, Projected, NavExtent))
+			{
+				TargetSlot = Projected.Location + FVector(0.0f, 0.0f, 45.0f);
+			}
+			else if (NavSys->ProjectPointToNavigation(PlayerActor->GetActorLocation(), Projected, NavExtent))
+			{
+				TargetSlot = Projected.Location + FVector(0.0f, 0.0f, 45.0f);
+			}
+		}
+
+		if (APawn* MinionPawn = Cast<APawn>(MinionActor))
+		{
+			if (AAIController* AICon = Cast<AAIController>(MinionPawn->GetController()))
+			{
+				AICon->StopMovement();
+			}
+		}
+
+		MinionActor->SetActorLocationAndRotation(
+			TargetSlot,
+			FRotator(0.0f, PlayerActor->GetActorRotation().Yaw, 0.0f),
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics);
+	}
+
+	if (FollowStanceInstance)
+	{
+		FollowStanceInstance->ForceImmediateEvaluation();
+	}
+
+	BroadcastDebug(FString::Printf(TEXT("Checkpoint Reset: Teleported %d minions to player and cleared affected interactables."), MinionCount), FColor::Green, 2.5f);
+}
+
 void UMinionSquadComponent::UnregisterMinion(AActor* MinionActor)
 {
 	if (!IsValid(MinionActor)) return;
+	
+	
 
 	const int32 FoundIdx = ActiveMinions.IndexOfByKey(MinionActor);
 	if (FoundIdx != INDEX_NONE)
 	{
+		
+		
 		if (IMinionAgentInterface* MinionInterface = ActiveMinionInterfaces[FoundIdx].GetInterface())
 		{
+			if (UMinionThrowTargetComponent* ThrowTarget = MinionInterface->GetActiveThrowTarget())
+			{
+				ThrowTarget->ReleaseMinion(MinionActor, FVector::ZeroVector, true);
+			}
 			MinionInterface->SetWhipModeEnabled(false);
 			MinionInterface->SetCarryRushModeEnabled(false);
 		}
@@ -2276,6 +2559,11 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	AActor* PlayerActor = GetOwner();
 	if (!World || !PlayerActor || !MinionActor) return;
 
+	// Guard against degenerate zero-length sweeps (e.g., slow frames or right after HitStop)
+	const FVector SafeEndLoc = StartLoc.Equals(EndLoc, 0.1f)
+		? (EndLoc + FVector(0.0f, 0.0f, 1.0f))
+		: EndLoc;
+
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MinionWhipSweep), false, PlayerActor);
 	QueryParams.AddIgnoredActor(PlayerActor);
 	for (AActor* SquadMinion : ActiveMinions)
@@ -2284,16 +2572,32 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	}
 
 	TArray<FHitResult> HitResults;
-	const bool bHit = World->SweepMultiByChannel(
+	// NOTE: SweepMultiByChannel returns TRUE only for BLOCKING hits; overlap hits populate HitResults while returning FALSE.
+	const bool bBlockingHitFound = World->SweepMultiByChannel(
 		HitResults,
 		StartLoc,
-		EndLoc,
+		SafeEndLoc,
 		FQuat::Identity,
 		WhipConfig.HitTraceChannel,
 		FCollisionShape::MakeSphere(WhipConfig.HitSphereRadius),
 		QueryParams);
 
-	if (!bHit) return;
+	if (bDebugDrawSlots)
+	{
+		// White = empty sweep volume | Yellow = overlap hit(s) detected | Red = blocking hit detected
+		const FColor SweepColor = HitResults.IsEmpty()
+			? FColor::White
+			: (bBlockingHitFound ? FColor::Red : FColor::Yellow);
+
+		DrawDebugSphere(World, SafeEndLoc, WhipConfig.HitSphereRadius, 10, SweepColor, false, 0.05f, 0, 1.0f);
+		DrawDebugLine(World, StartLoc, SafeEndLoc, SweepColor, false, 0.05f, 0, 1.5f);
+	}
+
+	// CRITICAL FIX: Check HitResults.IsEmpty(), NOT !bBlockingHitFound
+	if (HitResults.IsEmpty())
+	{
+		return;
+	}
 
 	const double CurrentTime = World->GetTimeSeconds();
 	const FHitFeedbackConfig& FeedbackCfg = WhipConfig.HitFeedback;
@@ -2301,18 +2605,26 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	for (const FHitResult& Hit : HitResults)
 	{
 		AActor* HitActor = Hit.GetActor();
+		UPrimitiveComponent* HitComp = Hit.GetComponent();
 		if (!IsValid(HitActor)) continue;
 
+		// 1. Check Whip Per-Target Cooldown
 		if (const double* LastHitTime = HitActorTimestamps.Find(HitActor))
 		{
-			if ((CurrentTime - *LastHitTime) < static_cast<double>(WhipConfig.HitCooldownPerTarget))
+			const double Elapsed = CurrentTime - *LastHitTime;
+			if (Elapsed < static_cast<double>(WhipConfig.HitCooldownPerTarget))
 			{
+				if (bDebugDrawSlots)
+				{
+					UE_LOG(LogTemp, Verbose, TEXT("[WhipDebug] Ignored %s (%s): Whip Cooldown %.2f / %.2fs"),
+						*GetNameSafe(HitActor), *GetNameSafe(HitComp), Elapsed, WhipConfig.HitCooldownPerTarget);
+				}
 				continue;
 			}
 		}
 
-		// Compute BOTW knockback direction: mostly radially away from player + subtle whip-travel follow-through
-		const FVector ShotDirection = (EndLoc - StartLoc).GetSafeNormal();
+		// 2. Compute BOTW knockback direction (radial away from player + whip travel follow-through)
+		const FVector ShotDirection = (SafeEndLoc - StartLoc).GetSafeNormal();
 		const FVector RadialAway = (HitActor->GetActorLocation() - PlayerActor->GetActorLocation()).GetSafeNormal2D();
 		FVector KnockDir = (RadialAway * 0.7f + ShotDirection.GetSafeNormal2D() * 0.3f).GetSafeNormal2D();
 		if (KnockDir.IsNearlyZero())
@@ -2324,7 +2636,6 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			(KnockDir * FeedbackCfg.KnockbackHorizontalStrength) +
 			FVector(0.0f, 0.0f, FeedbackCfg.KnockbackVerticalStrength);
 
-		// Build full combat payload
 		FCombatHitPayload Payload;
 		Payload.InstigatorActor = PlayerActor;
 		Payload.DamageCauser = MinionActor;
@@ -2340,13 +2651,13 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 		Payload.ImpactNormal = Hit.ImpactNormal;
 		Payload.KnockbackDirection = KnockDir;
 		Payload.KnockbackVelocity = KnockbackVel;
-		Payload.HeartDamage = FeedbackCfg.HeartDamage; // 1 Heart
+		Payload.HeartDamage = FeedbackCfg.HeartDamage;
 		Payload.WhipChainIndex = LinkIndexInArm;
 		Payload.StaggerDuration = FeedbackCfg.StaggerDuration;
 		Payload.AppliedHitStopDuration = FeedbackCfg.HitStopDuration;
 		Payload.HitResult = Hit;
 
-		// Route through IHitReactableInterface (preferred) or direct UHeartHealthComponent fallback
+		// 3. Route through IHitReactableInterface or UHeartHealthComponent
 		FCombatHitResponse HitResponse;
 		bool bHandledByCombatTarget = false;
 
@@ -2361,9 +2672,16 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			bHandledByCombatTarget = true;
 		}
 
-		// Respect target i-frames or already-dead actors so HitStop never triggers on invalid hits
+		// Log why a valid combat target rejected the hit (i-frames or already dead)
 		if (bHandledByCombatTarget && !HitResponse.bHitAccepted)
 		{
+			UE_LOG(LogTemp, Warning, TEXT("[WhipDebug] Target %s (%s) REJECTED hit (i-frames or dead). RemainingHearts=%d"),
+				*GetNameSafe(HitActor), *GetNameSafe(HitComp), HitResponse.RemainingHearts);
+
+			if (bDebugDrawSlots)
+			{
+				DrawDebugSphere(World, Payload.ImpactPoint, 22.0f, 8, FColor::Orange, false, 0.4f, 0, 2.0f);
+			}
 			continue;
 		}
 
@@ -2384,6 +2702,25 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			}
 
 			OnWhipCombatFeedback.Broadcast(Payload);
+
+			BroadcastDebug(
+				FString::Printf(TEXT("WHIP HIT %s [Comp: %s | Block:%d] -> -%d Heart (%d/%d left) | Kill:%d | WhipZ:%.0f vs TargetZ:%.0f"),
+					*GetNameSafe(HitActor),
+					*GetNameSafe(HitComp),
+					Hit.bBlockingHit ? 1 : 0,
+					Payload.HeartDamage,
+					Payload.RemainingHearts,
+					Payload.MaxHearts,
+					Payload.bIsKillingBlow ? 1 : 0,
+					SafeEndLoc.Z,
+					HitActor->GetActorLocation().Z),
+				Payload.bIsKillingBlow ? FColor::Yellow : FColor::Green,
+				2.5f);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[WhipDebug] Swept %s (%s) [Block:%d] but it has NO IHitReactableInterface or UHeartHealthComponent!"),
+				*GetNameSafe(HitActor), *GetNameSafe(HitComp), Hit.bBlockingHit ? 1 : 0);
 		}
 
 		// Preserve existing UE5 PointDamage + OnWhipDamageHit compatibility
@@ -2410,7 +2747,7 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 
 		if (bDebugDrawSlots)
 		{
-			DrawDebugSphere(World, Payload.ImpactPoint, 28.0f, 12, Payload.bIsKillingBlow ? FColor::Yellow : FColor::Red, false, 0.8f, 0, 2.5f);
+			DrawDebugSphere(World, Payload.ImpactPoint, 28.0f, 12, Payload.bIsKillingBlow ? FColor::Yellow : FColor::Green, false, 0.8f, 0, 2.5f);
 			DrawDebugDirectionalArrow(World, Payload.ImpactPoint, Payload.ImpactPoint + (KnockDir * 120.0f), 25.0f, FColor::Cyan, false, 0.8f, 0, 2.5f);
 		}
 	}

@@ -564,6 +564,31 @@ public:
 	UFUNCTION(BlueprintPure, Category = "PikminSquad")
 	const TArray<AActor*>& GetActiveMinions() const { return ActiveMinions; }
 	// ~End Carry Transport, Rush Charge & Momentum Jump Blueprint API
+	
+	// ~Begin Throw, Recall & Checkpoint Reset API
+	/** Picks the closest Idle/Following minion to ReferenceOrigin that can be thrown immediately. */
+	UFUNCTION(BlueprintCallable, Category = "PikminSquad|Throw")
+	AActor* FindBestThrowableMinion(const FVector& ReferenceOrigin, float MaxGrabDistance = 1100.0f) const;
+
+	/**
+	 * Recalls latched minions.
+	 * If bOnlyDetachIfReachable is true, minions on interactables with no NavMesh path to the player stay latched until a path exists.
+	 * If false, minions detach immediately and wait around the interactable object until the player has a valid NavMesh path.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PikminSquad|Throw")
+	int32 RecallThrownMinions(bool bOnlyDetachIfReachable = false);
+
+	/**
+	 * Checkpoint reset: cleanly detaches & removes any minions from affected interactable objects (firing detach/threshold events),
+	 * clears stranded anchors, and teleports the full squad onto valid NavMesh slots around the player.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PikminSquad|Checkpoint")
+	void ResetMinionsToPlayerCheckpoint(bool bDetachFromInteractables = true);
+
+	/** Returns true if a world point has a complete NavMesh path to the player's current grounded NavMesh location. */
+	UFUNCTION(BlueprintPure, Category = "PikminSquad|Throw")
+	bool CanWorldLocationReachPlayer(const FVector& WorldLocation) const;
+	// ~End Throw, Recall & Checkpoint Reset API
 
 protected:
 	virtual void BeginPlay() override;
