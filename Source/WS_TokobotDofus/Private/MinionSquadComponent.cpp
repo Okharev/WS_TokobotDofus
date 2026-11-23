@@ -10,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
+#include "SquadCarrierInterface.h"
 #include "NavigationSystem.h"
 #include "NavigationData.h"
 #include "AIController.h"
@@ -832,7 +833,7 @@ void UMinionStance_ChaosWhip::TickStance(float DeltaTime)
 }
 
 // ============================================================================
-// STANCE 3: UMinionStance_CarryRush IMPLEMENTATION (Uses StanceMinions)
+// STANCE 3: UMinionStance_CarryRush IMPLEMENTATION (Decoupled via ISquadCarrierInterface)
 // ============================================================================
 
 void UMinionStance_CarryRush::OnEnterStance()
@@ -840,7 +841,8 @@ void UMinionStance_CarryRush::OnEnterStance()
 	if (!Squad) return;
 
 	AActor* OwnerActor = Squad->GetOwner();
-	if (!OwnerActor) return;
+	ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(OwnerActor);
+	if (!OwnerActor || !Carrier) return;
 
 	CarryRushDirection = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
 	if (CarryRushDirection.IsNearlyZero())
@@ -857,17 +859,16 @@ void UMinionStance_CarryRush::OnEnterStance()
 	Squad->HitActorTimestamps.Reset();
 	RushIgnoredEnemies.Empty();
 
-	OwnerActor->OnActorHit.AddUniqueDynamic(Squad, &UMinionSquadComponent::OnPlayerRushActorHit);
+	// Event-driven jump interception (zero per-frame polling) and blocking wall-hit detection
+	Carrier->GetOnCarrierJumpIntercept().BindUObject(this, &UMinionStance_CarryRush::HandleCarrierJumpIntercept);
+	CarrierWallHitHandle = Carrier->GetOnCarrierWallHit().AddUObject(this, &UMinionStance_CarryRush::HandleCarrierWallHit);
 
-	if (ACharacter* PlayerChar = Cast<ACharacter>(OwnerActor))
+	if (USkeletalMeshComponent* MeshComp = Carrier->GetCarrierMesh())
 	{
-		if (USkeletalMeshComponent* MeshComp = PlayerChar->GetMesh())
+		if (!bPlayerMeshZModified)
 		{
-			if (!bPlayerMeshZModified)
-			{
-				CachedPlayerMeshBaseZ = MeshComp->GetRelativeLocation().Z;
-				bPlayerMeshZModified = true;
-			}
+			CachedPlayerMeshBaseZ = MeshComp->GetRelativeLocation().Z;
+			bPlayerMeshZModified = true;
 		}
 	}
 
@@ -899,69 +900,47 @@ void UMinionStance_CarryRush::OnEnterStance()
 		2.5f);
 }
 
-void UMinionStance_CarryRush::RestorePlayerMovementSettings()
-{
-	if (bPlayerMovementModified && Squad)
-	{
-		if (ACharacter* PlayerChar = Cast<ACharacter>(Squad->GetOwner()))
-		{
-			if (UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement())
-			{
-				MoveComp->MaxWalkSpeed = CachedPlayerMaxWalkSpeed;
-				MoveComp->MaxAcceleration = CachedPlayerMaxAcceleration;
-			}
-		}
-		bPlayerMovementModified = false;
-	}
-}
-
-void UMinionStance_CarryRush::RestorePlayerAirBraking()
-{
-	if (bPlayerAirBrakingModified && Squad)
-	{
-		if (ACharacter* PlayerChar = Cast<ACharacter>(Squad->GetOwner()))
-		{
-			if (UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement())
-			{
-				MoveComp->BrakingDecelerationFalling = CachedBrakingDecelFalling;
-				MoveComp->FallingLateralFriction = CachedFallingLateralFriction;
-			}
-			PlayerChar->LandedDelegate.RemoveDynamic(Squad, &UMinionSquadComponent::OnPlayerCarryJumpLanded);
-		}
-		bPlayerAirBrakingModified = false;
-	}
-}
-
 void UMinionStance_CarryRush::OnExitStance()
 {
 	if (!Squad) return;
 
 	AActor* OwnerActor = Squad->GetOwner();
+	ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(OwnerActor);
 	UPrimitiveComponent* OwnerRoot = OwnerActor ? Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent()) : nullptr;
 
-	if (OwnerActor)
+	if (Carrier)
 	{
-		OwnerActor->OnActorHit.RemoveDynamic(Squad, &UMinionSquadComponent::OnPlayerRushActorHit);
+		Carrier->SetCarrierVelocityOverride(FVector::ZeroVector, false);
+
+		if (Carrier->GetOnCarrierJumpIntercept().IsBoundToObject(this))
+		{
+			Carrier->GetOnCarrierJumpIntercept().Unbind();
+		}
+		if (CarrierWallHitHandle.IsValid())
+		{
+			Carrier->GetOnCarrierWallHit().Remove(CarrierWallHitHandle);
+			CarrierWallHitHandle.Reset();
+		}
 	}
 
-	RestorePlayerMovementSettings();
-
+	// Keep CarrierGroundedHandle alive while airborne during a Carry Momentum Jump so landing releases JumpCarriedMinion
 	if (!bIsCarryJumping)
 	{
-		RestorePlayerAirBraking();
+		if (Carrier && CarrierGroundedHandle.IsValid())
+		{
+			Carrier->GetOnCarrierGroundedChanged().Remove(CarrierGroundedHandle);
+			CarrierGroundedHandle.Reset();
+		}
 		ReleaseCarriedJumpMinion();
 	}
 
-	if (bPlayerMeshZModified)
+	if (bPlayerMeshZModified && Carrier)
 	{
-		if (ACharacter* PlayerChar = Cast<ACharacter>(OwnerActor))
+		if (USkeletalMeshComponent* MeshComp = Carrier->GetCarrierMesh())
 		{
-			if (USkeletalMeshComponent* MeshComp = PlayerChar->GetMesh())
-			{
-				FVector RelLoc = MeshComp->GetRelativeLocation();
-				RelLoc.Z = CachedPlayerMeshBaseZ;
-				MeshComp->SetRelativeLocation(RelLoc);
-			}
+			FVector RelLoc = MeshComp->GetRelativeLocation();
+			RelLoc.Z = CachedPlayerMeshBaseZ;
+			MeshComp->SetRelativeLocation(RelLoc);
 		}
 		bPlayerMeshZModified = false;
 	}
@@ -981,7 +960,7 @@ void UMinionStance_CarryRush::OnExitStance()
 	bIsRushCharging = false;
 	CurrentRushSpeed = 0.0f;
 
-	// Release all minions EXCEPT the one being carried in mid-air during a Momentum Jump!
+	// Release all minions EXCEPT the one carried in mid-air during a Momentum Jump
 	for (int32 i = 0; i < Squad->StanceMinionInterfaces.Num(); ++i)
 	{
 		AActor* MinionActor = Squad->StanceMinions.IsValidIndex(i) ? Squad->StanceMinions[i].Get() : nullptr;
@@ -997,6 +976,31 @@ void UMinionStance_CarryRush::OnExitStance()
 	}
 }
 
+void UMinionStance_CarryRush::UnbindCarrierDelegates()
+{
+	if (!Squad) return;
+
+	if (ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(Squad->GetOwner()))
+	{
+		Carrier->SetCarrierVelocityOverride(FVector::ZeroVector, false);
+
+		if (Carrier->GetOnCarrierJumpIntercept().IsBoundToObject(this))
+		{
+			Carrier->GetOnCarrierJumpIntercept().Unbind();
+		}
+		if (CarrierWallHitHandle.IsValid())
+		{
+			Carrier->GetOnCarrierWallHit().Remove(CarrierWallHitHandle);
+			CarrierWallHitHandle.Reset();
+		}
+		if (CarrierGroundedHandle.IsValid())
+		{
+			Carrier->GetOnCarrierGroundedChanged().Remove(CarrierGroundedHandle);
+			CarrierGroundedHandle.Reset();
+		}
+	}
+}
+
 void UMinionStance_CarryRush::ReleaseCarriedJumpMinion()
 {
 	if (!IsValid(JumpCarriedMinion))
@@ -1008,10 +1012,8 @@ void UMinionStance_CarryRush::ReleaseCarriedJumpMinion()
 	AActor* MinionToRelease = JumpCarriedMinion;
 	JumpCarriedMinion = nullptr;
 
-	// 1. Detach from the Player keeping world transform
 	MinionToRelease->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
 
-	// 2. Place safely on the ground/NavMesh next to the player so it doesn't clip into a wall or floor
 	if (Squad)
 	{
 		if (AActor* PlayerActor = Squad->GetOwner())
@@ -1034,7 +1036,6 @@ void UMinionStance_CarryRush::ReleaseCarriedJumpMinion()
 		}
 	}
 
-	// 3. Restore capsule collision and exit CarryRush mode so it resumes normal Follow behavior
 	if (UPrimitiveComponent* MinionRoot = Cast<UPrimitiveComponent>(MinionToRelease->GetRootComponent()))
 	{
 		MinionRoot->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -1062,26 +1063,12 @@ bool UMinionStance_CarryRush::StartRushCharge()
 	if (!Squad) return false;
 
 	AActor* OwnerActor = Squad->GetOwner();
-	if (!OwnerActor) return false;
+	if (!OwnerActor || !Cast<ISquadCarrierInterface>(OwnerActor)) return false;
 
 	CarryRushDirection = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
 	if (CarryRushDirection.IsNearlyZero())
 	{
 		CarryRushDirection = FVector::ForwardVector;
-	}
-
-	if (ACharacter* PlayerChar = Cast<ACharacter>(OwnerActor))
-	{
-		if (UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement())
-		{
-			if (!bPlayerMovementModified)
-			{
-				CachedPlayerMaxWalkSpeed = MoveComp->MaxWalkSpeed;
-				CachedPlayerMaxAcceleration = MoveComp->MaxAcceleration;
-				bPlayerMovementModified = true;
-			}
-			MoveComp->MaxAcceleration = 99999.0f;
-		}
 	}
 
 	bIsRushCharging = true;
@@ -1098,25 +1085,38 @@ void UMinionStance_CarryRush::StopRushCharge(bool bExitCarryStance)
 	bIsRushCharging = false;
 	CarryRushChargeElapsedTime = 0.0f;
 	CurrentRushSpeed = 0.0f;
-	RestorePlayerMovementSettings();
 
-	if (bExitCarryStance && Squad && Squad->GetSquadStance() == EMinionSquadStance::CarryRush)
+	if (Squad)
 	{
-		Squad->SetSquadStance(EMinionSquadStance::Follow);
+		if (ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(Squad->GetOwner()))
+		{
+			Carrier->SetCarrierVelocityOverride(FVector::ZeroVector, false);
+		}
+
+		if (bExitCarryStance && Squad->GetSquadStance() == EMinionSquadStance::CarryRush)
+		{
+			Squad->SetSquadStance(EMinionSquadStance::Follow);
+		}
 	}
+}
+
+bool UMinionStance_CarryRush::HandleCarrierJumpIntercept()
+{
+	// Consumes standard jump input while in CarryRush and converts it into a Momentum Jump
+	return TriggerMomentumJump();
 }
 
 bool UMinionStance_CarryRush::TriggerMomentumJump()
 {
 	if (!Squad || bIsCarryJumping) return false;
 
-	ACharacter* PlayerChar = Cast<ACharacter>(Squad->GetOwner());
-	if (!PlayerChar) return false;
+	AActor* OwnerActor = Squad->GetOwner();
+	ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(OwnerActor);
+	if (!OwnerActor || !Carrier) return false;
 
-	UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement();
 	const FMinionCarryRushConfig& Cfg = Squad->CarryRushConfig;
 
-	FVector JumpForwardDir = PlayerChar->GetActorForwardVector().GetSafeNormal2D();
+	FVector JumpForwardDir = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
 	float HorizontalSpeed = 0.0f;
 
 	if (bIsRushCharging)
@@ -1127,7 +1127,7 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 	}
 	else
 	{
-		const FVector PlayerVel2D(PlayerChar->GetVelocity().X, PlayerChar->GetVelocity().Y, 0.0f);
+		const FVector PlayerVel2D(OwnerActor->GetVelocity().X, OwnerActor->GetVelocity().Y, 0.0f);
 		const float CurrentWalkSpeed = PlayerVel2D.Size();
 		if (CurrentWalkSpeed > 20.0f)
 		{
@@ -1136,22 +1136,11 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 		HorizontalSpeed = CurrentWalkSpeed * Cfg.JumpMomentumMultiplier;
 	}
 
-	RestorePlayerMovementSettings();
-
-	if (MoveComp && !bPlayerAirBrakingModified)
-	{
-		CachedBrakingDecelFalling = MoveComp->BrakingDecelerationFalling;
-		CachedFallingLateralFriction = MoveComp->FallingLateralFriction;
-		MoveComp->BrakingDecelerationFalling = 0.0f;
-		MoveComp->FallingLateralFriction = 0.0f;
-		bPlayerAirBrakingModified = true;
-	}
-
-	// Pick 1 minion to carry along with the player during the jump so they have at least 1 minion where they land!
+	// Pick 1 minion to carry along with the player during the jump
 	ReleaseCarriedJumpMinion();
 	if (Cfg.bCarryOneMinionDuringJump && Squad->PruneInvalidStanceMinions() > 0)
 	{
-		const FVector PlayerLoc = PlayerChar->GetActorLocation();
+		const FVector PlayerLoc = OwnerActor->GetActorLocation();
 		int32 ClosestIdx = 0;
 		float BestDistSq = MAX_flt;
 
@@ -1168,13 +1157,12 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 		JumpCarriedMinion = Squad->StanceMinions[ClosestIdx];
 		if (IsValid(JumpCarriedMinion))
 		{
-			// Disable capsule collision while attached in mid-air so the carried minion never snags on ledge lips
 			if (UPrimitiveComponent* MinionRoot = Cast<UPrimitiveComponent>(JumpCarriedMinion->GetRootComponent()))
 			{
 				MinionRoot->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			}
 
-			USkeletalMeshComponent* PlayerMesh = PlayerChar->GetMesh();
+			USkeletalMeshComponent* PlayerMesh = Carrier->GetCarrierMesh();
 			if (!Cfg.CarriedMinionAttachSocket.IsNone() && PlayerMesh && PlayerMesh->DoesSocketExist(Cfg.CarriedMinionAttachSocket))
 			{
 				JumpCarriedMinion->AttachToComponent(
@@ -1185,7 +1173,7 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 			else
 			{
 				JumpCarriedMinion->AttachToComponent(
-					PlayerChar->GetRootComponent(),
+					OwnerActor->GetRootComponent(),
 					FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 				JumpCarriedMinion->SetActorRelativeLocation(Cfg.CarriedMinionLocalOffset);
 				JumpCarriedMinion->SetActorRelativeRotation(FRotator::ZeroRotator);
@@ -1194,14 +1182,15 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 	}
 
 	bIsCarryJumping = true;
-	PlayerChar->LandedDelegate.AddUniqueDynamic(Squad, &UMinionSquadComponent::OnPlayerCarryJumpLanded);
+	if (!CarrierGroundedHandle.IsValid())
+	{
+		CarrierGroundedHandle = Carrier->GetOnCarrierGroundedChanged().AddUObject(
+			this, &UMinionStance_CarryRush::HandleCarrierGroundedChanged);
+	}
 
 	const FVector LaunchVelocity = (JumpForwardDir * HorizontalSpeed) + FVector(0.0f, 0.0f, Cfg.JumpVerticalVelocity);
-	PlayerChar->LaunchCharacter(LaunchVelocity, true, true);
-	if (MoveComp)
-	{
-		MoveComp->SetMovementMode(MOVE_Falling);
-	}
+	// Drag-free launch handled natively by UActionMovementComponent (no BrakingDecelerationFalling hacks)
+	Carrier->LaunchCarrier(LaunchVelocity, true);
 
 	Squad->OnCarryJumpTriggered.Broadcast(LaunchVelocity, HorizontalSpeed);
 	Squad->BroadcastDebug(
@@ -1210,15 +1199,32 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 		FColor::Yellow,
 		2.5f);
 
-	// Switch squad back to Follow stance (OnExitStance skips JumpCarriedMinion until touchdown)
+	// Switch back to Follow (OnExitStance preserves JumpCarriedMinion until touchdown)
 	Squad->SetSquadStance(EMinionSquadStance::Follow);
 	return true;
 }
 
-void UMinionStance_CarryRush::HandlePlayerLanded(const FHitResult& Hit)
+void UMinionStance_CarryRush::HandleCarrierGroundedChanged(bool bIsGrounded)
 {
+	if (!bIsGrounded || !bIsCarryJumping)
+	{
+		return;
+	}
+
 	bIsCarryJumping = false;
-	RestorePlayerAirBraking();
+
+	if (Squad)
+	{
+		if (ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(Squad->GetOwner()))
+		{
+			if (CarrierGroundedHandle.IsValid())
+			{
+				Carrier->GetOnCarrierGroundedChanged().Remove(CarrierGroundedHandle);
+				CarrierGroundedHandle.Reset();
+			}
+		}
+	}
+
 	ReleaseCarriedJumpMinion();
 
 	if (Squad && Squad->GetSquadStance() == EMinionSquadStance::Follow && Squad->FollowStanceInstance)
@@ -1227,40 +1233,37 @@ void UMinionStance_CarryRush::HandlePlayerLanded(const FHitResult& Hit)
 	}
 }
 
-void UMinionStance_CarryRush::HandlePlayerWallHit(AActor* OtherActor, const FHitResult& Hit)
+void UMinionStance_CarryRush::HandleCarrierWallHit(AActor* OtherActor, const FHitResult& Hit)
 {
-	if (!bIsRushCharging || !Squad || !OtherActor) return;
-	if (OtherActor->IsA<APawn>()) return;
+	if (!bIsRushCharging || !Squad || !OtherActor || OtherActor->IsA<APawn>()) return;
 
 	const FMinionCarryRushConfig& Cfg = Squad->CarryRushConfig;
 
-	if (FMath::Abs(Hit.ImpactNormal.Z) < Cfg.WallNormalZThreshold)
+	if (FMath::Abs(Hit.ImpactNormal.Z) < Cfg.WallNormalZThreshold &&
+		FVector::DotProduct(CarryRushDirection, Hit.ImpactNormal) < -0.2f)
 	{
-		if (FVector::DotProduct(CarryRushDirection, Hit.ImpactNormal) < -0.2f)
+		const float CrashSpeed = CurrentRushSpeed;
+		if (Squad->bDebugDrawSlots && Squad->GetWorld())
 		{
-			const float CrashSpeed = CurrentRushSpeed;
-			if (Squad->bDebugDrawSlots && Squad->GetWorld())
-			{
-				DrawDebugSphere(Squad->GetWorld(), Hit.ImpactPoint, 45.0f, 16, FColor::Orange, false, 2.0f, 0, 4.0f);
-			}
-
-			Squad->BroadcastDebug(
-				FString::Printf(TEXT("CARRY RUSH HIT WALL (%s) at Speed %.0f!"), *GetNameSafe(OtherActor), CrashSpeed),
-				FColor::Orange,
-				3.0f);
-
-			if (ACharacter* PlayerChar = Cast<ACharacter>(Squad->GetOwner()))
-			{
-				if (Cfg.WallBounceBackStrength > 0.0f)
-				{
-					const FVector BounceVel = (Hit.ImpactNormal.GetSafeNormal2D() * Cfg.WallBounceBackStrength) + FVector(0.0f, 0.0f, 260.0f);
-					PlayerChar->LaunchCharacter(BounceVel, true, true);
-				}
-			}
-
-			Squad->OnCarryRushWallImpact.Broadcast(Hit.ImpactPoint, Hit.ImpactNormal, CrashSpeed, Hit);
-			StopRushCharge(Cfg.bExitCarryStanceOnWallHit);
+			DrawDebugSphere(Squad->GetWorld(), Hit.ImpactPoint, 45.0f, 16, FColor::Orange, false, 2.0f, 0, 4.0f);
 		}
+
+		Squad->BroadcastDebug(
+			FString::Printf(TEXT("CARRY RUSH HIT WALL (%s) at Speed %.0f!"), *GetNameSafe(OtherActor), CrashSpeed),
+			FColor::Orange,
+			3.0f);
+
+		if (ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(Squad->GetOwner()))
+		{
+			if (Cfg.WallBounceBackStrength > 0.0f)
+			{
+				const FVector BounceVel = (Hit.ImpactNormal.GetSafeNormal2D() * Cfg.WallBounceBackStrength) + FVector(0.0f, 0.0f, 260.0f);
+				Carrier->LaunchCarrier(BounceVel, false);
+			}
+		}
+
+		Squad->OnCarryRushWallImpact.Broadcast(Hit.ImpactPoint, Hit.ImpactNormal, CrashSpeed, Hit);
+		StopRushCharge(Cfg.bExitCarryStanceOnWallHit);
 	}
 }
 
@@ -1286,12 +1289,11 @@ FVector UMinionStance_CarryRush::CalculatePalanquinSlotLocation(
 	const float LocalRight = ((Col - ColCenterOffset) * Cfg.PalanquinColSpacing) + HoneycombStagger;
 
 	float TargetZ = PlayerLoc.Z;
-	if (const ACharacter* PlayerChar = Cast<ACharacter>(Squad->GetOwner()))
+	if (const ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(Squad->GetOwner()))
 	{
-		if (const UCapsuleComponent* PlayerCap = PlayerChar->GetCapsuleComponent())
+		if (const UCapsuleComponent* PlayerCap = Carrier->GetCarrierCapsule())
 		{
-			const float PlayerBottomZ = PlayerLoc.Z - PlayerCap->GetScaledCapsuleHalfHeight();
-			TargetZ = PlayerBottomZ + 45.0f;
+			TargetZ = (PlayerLoc.Z - PlayerCap->GetScaledCapsuleHalfHeight()) + 45.0f;
 		}
 	}
 
@@ -1315,16 +1317,13 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 	QueryParams.AddIgnoredActor(PlayerActor);
 	for (AActor* SquadMinion : Squad->ActiveMinions)
 	{
-		if (IsValid(SquadMinion))
-		{
-			QueryParams.AddIgnoredActor(SquadMinion);
-		}
+		if (IsValid(SquadMinion)) QueryParams.AddIgnoredActor(SquadMinion);
 	}
 
 	const FVector ExtendedEnd = SweepEnd + (CarryRushDirection * 45.0f);
 
 	TArray<FHitResult> HitResults;
-	const bool bHit = World->SweepMultiByChannel(
+	World->SweepMultiByChannel(
 		HitResults,
 		SweepStart,
 		ExtendedEnd,
@@ -1347,10 +1346,7 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 	for (const FHitResult& Hit : HitResults)
 	{
 		AActor* HitActor = Hit.GetActor();
-		if (!IsValid(HitActor) || HitActor == PlayerActor || !HitActor->IsA<APawn>())
-		{
-			continue;
-		}
+		if (!IsValid(HitActor) || HitActor == PlayerActor || !HitActor->IsA<APawn>()) continue;
 
 		if (PlayerRoot)
 		{
@@ -1373,15 +1369,10 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 				: TSubclassOf<UDamageType>(UDamageType::StaticClass());
 
 			UGameplayStatics::ApplyPointDamage(
-				HitActor,
-				RamDamage,
-				CarryRushDirection,
-				Hit,
-				InstigatorController,
-				PlayerActor,
-				DmgType);
+				HitActor, RamDamage, CarryRushDirection, Hit, InstigatorController, PlayerActor, DmgType);
 		}
 
+		// Enemies remain ACharacter, so LaunchCharacter stays valid here
 		if (ACharacter* HitEnemyChar = Cast<ACharacter>(HitActor))
 		{
 			const FVector ToEnemy = (HitEnemyChar->GetActorLocation() - PlayerActor->GetActorLocation()).GetSafeNormal2D();
@@ -1399,10 +1390,11 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 	if (!Squad) return;
 
 	AActor* PlayerActor = Squad->GetOwner();
+	ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(PlayerActor);
 	UWorld* World = Squad->GetWorld();
 	const int32 MinionCount = Squad->PruneInvalidStanceMinions();
 
-	if (!PlayerActor || !World || MinionCount < Squad->MinReachableMinionsForSpecialStance)
+	if (!PlayerActor || !Carrier || !World || MinionCount < Squad->MinReachableMinionsForSpecialStance)
 	{
 		Squad->SetSquadStance(EMinionSquadStance::Follow);
 		return;
@@ -1411,26 +1403,10 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 	const FMinionCarryRushConfig& Cfg = Squad->CarryRushConfig;
 	CarryStanceElapsedTime += DeltaTime;
 
-	ACharacter* PlayerChar = Cast<ACharacter>(PlayerActor);
-	UCharacterMovementComponent* MoveComp = PlayerChar ? PlayerChar->GetCharacterMovement() : nullptr;
-
-	// 1. Detect Jump and immediately propel player forward while leaving minions behind in Follow stance
-	if (!bIsCarryJumping && PlayerChar && MoveComp)
+	// 1. Hoist the player's SkeletalMesh onto the minions' shoulders during GatherDuration
+	if (bPlayerMeshZModified)
 	{
-		const bool bJumpStartedThisFrame = PlayerChar->bPressedJump ||
-			(MoveComp->IsFalling() && PlayerChar->GetVelocity().Z > 50.0f);
-
-		if (bJumpStartedThisFrame)
-		{
-			TriggerMomentumJump();
-			return;
-		}
-	}
-
-	// 2. Hoist the player's SkeletalMesh onto the minions' shoulders during GatherDuration
-	if (PlayerChar && bPlayerMeshZModified)
-	{
-		if (USkeletalMeshComponent* MeshComp = PlayerChar->GetMesh())
+		if (USkeletalMeshComponent* MeshComp = Carrier->GetCarrierMesh())
 		{
 			const float GatherAlpha = (Cfg.GatherDuration > SMALL_NUMBER)
 				? FMath::Clamp(CarryStanceElapsedTime / Cfg.GatherDuration, 0.0f, 1.0f)
@@ -1442,7 +1418,7 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 		}
 	}
 
-	// 3. Drive Grounded Rush via UCharacterMovementComponent
+	// 2. Drive Grounded Rush via ISquadCarrierInterface (wall impacts arrive automatically via HandleCarrierWallHit)
 	if (bIsRushCharging)
 	{
 		CarryRushChargeElapsedTime += DeltaTime;
@@ -1455,56 +1431,13 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 		{
 			PlayerActor->SetActorRotation(CarryRushDirection.Rotation());
 
-			CurrentRushSpeed = FMath::Min(
-				CurrentRushSpeed + (Cfg.Acceleration * DeltaTime),
-				Cfg.MaxSpeed);
+			CurrentRushSpeed = FMath::Min(CurrentRushSpeed + (Cfg.Acceleration * DeltaTime), Cfg.MaxSpeed);
 
 			const FVector StartPlayerLoc = PlayerActor->GetActorLocation();
 			const FVector DesiredStep = CarryRushDirection * (CurrentRushSpeed * DeltaTime);
 
 			PerformFrontEnemyBumperSweep(StartPlayerLoc, StartPlayerLoc + DesiredStep);
-
-			if (MoveComp && PlayerChar)
-			{
-				MoveComp->MaxWalkSpeed = CurrentRushSpeed;
-				MoveComp->Velocity = FVector(
-					CarryRushDirection.X * CurrentRushSpeed,
-					CarryRushDirection.Y * CurrentRushSpeed,
-					MoveComp->Velocity.Z);
-				PlayerChar->AddMovementInput(CarryRushDirection, 1.0f);
-			}
-
-			if (UCapsuleComponent* PlayerCap = PlayerChar ? PlayerChar->GetCapsuleComponent() : nullptr)
-			{
-				FCollisionQueryParams WallParams(SCENE_QUERY_STAT(CarryRushWallTrace), false, PlayerActor);
-				for (AActor* SquadMinion : Squad->ActiveMinions)
-				{
-					if (IsValid(SquadMinion)) WallParams.AddIgnoredActor(SquadMinion);
-				}
-				for (const TWeakObjectPtr<AActor>& IgnoredEnemy : RushIgnoredEnemies)
-				{
-					if (IgnoredEnemy.IsValid()) WallParams.AddIgnoredActor(IgnoredEnemy.Get());
-				}
-
-				FHitResult WallHit;
-				const float CapRadius = PlayerCap->GetScaledCapsuleRadius();
-				const float CapHalfHeight = PlayerCap->GetScaledCapsuleHalfHeight() * 0.8f;
-				if (World->SweepSingleByChannel(
-					WallHit,
-					StartPlayerLoc,
-					StartPlayerLoc + (CarryRushDirection * 22.0f),
-					FQuat::Identity,
-					ECC_WorldStatic,
-					FCollisionShape::MakeCapsule(CapRadius, CapHalfHeight),
-					WallParams))
-				{
-					if (WallHit.bBlockingHit && FMath::Abs(WallHit.ImpactNormal.Z) < Cfg.WallNormalZThreshold)
-					{
-						HandlePlayerWallHit(WallHit.GetActor(), WallHit);
-						return;
-					}
-				}
-			}
+			Carrier->SetCarrierVelocityOverride(CarryRushDirection * CurrentRushSpeed, true);
 		}
 	}
 	else
@@ -1512,7 +1445,7 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 		CurrentRushSpeed = PlayerActor->GetVelocity().Size2D();
 	}
 
-	// 4. Update Participating Minions in the Palanquin Underneath the Player
+	// 3. Update participating minions in the palanquin underneath the player
 	const FVector UpdatedPlayerLoc = PlayerActor->GetActorLocation();
 	const FVector PlayerVel2D(PlayerActor->GetVelocity().X, PlayerActor->GetVelocity().Y, 0.0f);
 
@@ -1649,7 +1582,8 @@ void UMinionSquadComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	if (CarryRushStanceInstance)
 	{
-		CarryRushStanceInstance->RestorePlayerAirBraking();
+		// Cleanly unbinds any lingering airborne delegate handles and detaches carried minion
+		CarryRushStanceInstance->UnbindCarrierDelegates();
 		CarryRushStanceInstance->ReleaseCarriedJumpMinion();
 	}
 
@@ -1716,8 +1650,15 @@ bool UMinionSquadComponent::IsPlayerGroundedOnNavMesh(UNavigationSystemV1* NavSy
 	const AActor* PlayerActor = GetOwner();
 	if (!NavSys || !PlayerActor) return false;
 
-	// 1. Reject if the player is currently jumping/falling in mid-air
-	if (const ACharacter* PlayerChar = Cast<ACharacter>(PlayerActor))
+	// 1. Reject if carrier is airborne (supports AZeldaPawn via interface with ACharacter fallback)
+	if (const ISquadCarrierInterface* Carrier = Cast<ISquadCarrierInterface>(PlayerActor))
+	{
+		if (!Carrier->IsCarrierGrounded())
+		{
+			return false;
+		}
+	}
+	else if (const ACharacter* PlayerChar = Cast<ACharacter>(PlayerActor))
 	{
 		if (const UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement())
 		{
@@ -1731,7 +1672,7 @@ bool UMinionSquadComponent::IsPlayerGroundedOnNavMesh(UNavigationSystemV1* NavSy
 	ANavigationData* NavData = NavSys->GetDefaultNavDataInstance();
 	if (!NavData) return false;
 
-	// 2. Reject if the player's feet are not standing on a valid NavMesh surface
+	// 2. Reject if feet are not standing on a valid NavMesh polygon
 	FNavLocation ProjectedPlayerNav;
 	const FVector PlayerFeetExtent(75.0f, 75.0f, 125.0f);
 	if (!NavSys->ProjectPointToNavigation(PlayerActor->GetActorLocation(), ProjectedPlayerNav, PlayerFeetExtent, NavData))
@@ -2066,22 +2007,6 @@ float UMinionSquadComponent::GetCurrentCarryRushSpeed() const
 	return (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
 		? CarryRushStanceInstance->GetCurrentRushSpeed()
 		: 0.0f;
-}
-
-void UMinionSquadComponent::OnPlayerCarryJumpLanded(const FHitResult& Hit)
-{
-	if (CarryRushStanceInstance)
-	{
-		CarryRushStanceInstance->HandlePlayerLanded(Hit);
-	}
-}
-
-void UMinionSquadComponent::OnPlayerRushActorHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit)
-{
-	if (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
-	{
-		CarryRushStanceInstance->HandlePlayerWallHit(OtherActor, Hit);
-	}
 }
 
 // ============================================================================

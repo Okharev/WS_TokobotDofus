@@ -323,11 +323,7 @@ private:
 };
 
 /**
- * Stance 3: Non-stacking Carry Transport Palanquin, CharacterMovement-driven Rush Charge, and Momentum Jump.
- * Operates exclusively on Squad->StanceMinions (minions that had a valid path to the player).
- */
-/**
- * Stance 3: Non-stacking Carry Transport Palanquin, CharacterMovement-driven Rush Charge, and Momentum Jump.
+ * Stance 3: Non-stacking Carry Transport Palanquin, ISquadCarrierInterface-driven Rush Charge, and Momentum Jump.
  */
 UCLASS()
 class UMinionStance_CarryRush : public UMinionStanceBase
@@ -345,9 +341,7 @@ public:
 	void StopRushCharge(bool bExitCarryStance);
 	bool TriggerMomentumJump();
 
-	void HandlePlayerLanded(const FHitResult& Hit);
-	void HandlePlayerWallHit(AActor* OtherActor, const FHitResult& Hit);
-	void RestorePlayerAirBraking();
+	void UnbindCarrierDelegates();
 	void ReleaseCarriedJumpMinion();
 
 	bool IsRushCharging() const { return bIsRushCharging; }
@@ -355,7 +349,11 @@ public:
 	float GetCurrentRushSpeed() const { return CurrentRushSpeed; }
 
 private:
-	void RestorePlayerMovementSettings();
+	// Event-driven callbacks bound to ISquadCarrierInterface
+	void HandleCarrierGroundedChanged(bool bIsGrounded);
+	bool HandleCarrierJumpIntercept();
+	void HandleCarrierWallHit(AActor* OtherActor, const FHitResult& Hit);
+
 	FVector CalculatePalanquinSlotLocation(int32 MinionIdx, int32 TotalCount, const FVector& PlayerLoc, const FVector& ForwardDir, const FVector& RightDir) const;
 	void PerformFrontEnemyBumperSweep(const FVector& SweepStart, const FVector& SweepEnd);
 
@@ -364,6 +362,10 @@ private:
 	/** The single minion carried along with the player in mid-air during a Momentum Jump. */
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> JumpCarriedMinion = nullptr;
+
+	// Native multicast delegate handles (replaces LandedDelegate, OnActorHit, and bPressedJump polling)
+	FDelegateHandle CarrierGroundedHandle;
+	FDelegateHandle CarrierWallHitHandle;
 
 	bool bIsRushCharging = false;
 	bool bIsCarryJumping = false;
@@ -374,14 +376,6 @@ private:
 
 	float CachedPlayerMeshBaseZ = 0.0f;
 	bool bPlayerMeshZModified = false;
-
-	float CachedPlayerMaxWalkSpeed = 0.0f;
-	float CachedPlayerMaxAcceleration = 0.0f;
-	bool bPlayerMovementModified = false;
-
-	float CachedBrakingDecelFalling = 0.0f;
-	float CachedFallingLateralFriction = 0.0f;
-	bool bPlayerAirBrakingModified = false;
 };
 
 // ============================================================================
@@ -679,11 +673,7 @@ private:
 		bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	UFUNCTION()
-	void OnPlayerCarryJumpLanded(const FHitResult& Hit);
-
-	UFUNCTION()
-	void OnPlayerRushActorHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
+	
 
 	UPROPERTY(Transient)
 	TObjectPtr<USphereComponent> AvoidanceSphere;
