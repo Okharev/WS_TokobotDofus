@@ -5,6 +5,7 @@
 #include "Components/SceneComponent.h"
 #include "Engine/HitResult.h"
 #include "UObject/ScriptInterface.h"
+#include "CombatFeedbackTypes.h"
 #include "MinionSquadComponent.generated.h"
 
 class USphereComponent;
@@ -134,6 +135,10 @@ struct FMinionWhipConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	float MinPhysicsSpeedForDamage = 650.0f;
+	
+	/**  1-heart damage, knockback, HitStop freeze, and camera shake tuning. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage|BOTWFeedback")
+	FHitFeedbackConfig HitFeedback;
 };
 
 /**
@@ -397,6 +402,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(
 	int32, WhipChainIndex,
 	const FHitResult&, HitResult);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWhipCombatFeedbackSignature, const FCombatHitPayload&, HitPayload);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
 	FOnCarryRushEnemyHitSignature,
 	AActor*, HitActor,
@@ -448,6 +455,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnWhipDamageHitSignature OnWhipDamageHit;
+	
+	/** Rich feedback event (ImpactPoint, Knockback, Hearts, bIsKillingBlow) for Whip VFX/SFX/UI. */
+	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
+	FOnWhipCombatFeedbackSignature OnWhipCombatFeedback;
 
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnCarryRushEnemyHitSignature OnCarryRushEnemyHit;

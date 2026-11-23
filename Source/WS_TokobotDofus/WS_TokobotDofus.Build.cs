@@ -13,6 +13,7 @@ public class WS_TokobotDofus : ModuleRules
 			"Engine", 
 			"InputCore", 
 			"EnhancedInput",
+			"GameplayTasks",
 			"GameplayTags",             // Required for FGameplayTag
 			"AIModule",                 // Required for AAIController
 			"NavigationSystem",         // Required for ProjectPointToNavigation
