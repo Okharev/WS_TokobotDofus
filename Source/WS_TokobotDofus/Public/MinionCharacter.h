@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "MinionAgentInterface.h"
+#include "SquashStretchComponent.h"
 #include "MinionCharacter.generated.h"
 
 class AAIController;
@@ -80,6 +81,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Avoidance")
 	float EvadeStepDistance = 140.0f;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Juice")
+	TObjectPtr<USquashStretchComponent> SquashStretchComp = CreateDefaultSubobject<USquashStretchComponent>(TEXT("SquashStretch"));
+	
 	/** Cooldown (in seconds) before a minion returns to normal squad slot updates after evading. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Avoidance")
 	float EvadeRecoveryTime = 0.35f;
@@ -99,6 +103,7 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<ANavLinkProxy> ActiveNavLink;
 
+	FVector ThrowControlPoint = FVector::ZeroVector;
 	FVector CachedSquadSlotLocation = FVector::ZeroVector;
 	FVector LastIssuedMoveTarget = FVector::ZeroVector;
 	FTimerHandle EvadeTimerHandle;
