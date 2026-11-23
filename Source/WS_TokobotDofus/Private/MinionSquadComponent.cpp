@@ -17,6 +17,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Engine.h"
+#include "HitReactableInterface.h"
+#include "HitFeedbackSubsystem.h"
+#include "HeartHealthComponent.h"
 #include "NavFilters/NavigationQueryFilter.h"
 
 // ============================================================================
@@ -2293,6 +2296,7 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	if (!bHit) return;
 
 	const double CurrentTime = World->GetTimeSeconds();
+	const FHitFeedbackConfig& FeedbackCfg = WhipConfig.HitFeedback;
 
 	for (const FHitResult& Hit : HitResults)
 	{
@@ -2307,11 +2311,83 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			}
 		}
 
+		// Compute BOTW knockback direction: mostly radially away from player + subtle whip-travel follow-through
+		const FVector ShotDirection = (EndLoc - StartLoc).GetSafeNormal();
+		const FVector RadialAway = (HitActor->GetActorLocation() - PlayerActor->GetActorLocation()).GetSafeNormal2D();
+		FVector KnockDir = (RadialAway * 0.7f + ShotDirection.GetSafeNormal2D() * 0.3f).GetSafeNormal2D();
+		if (KnockDir.IsNearlyZero())
+		{
+			KnockDir = PlayerActor->GetActorForwardVector().GetSafeNormal2D();
+		}
+
+		const FVector KnockbackVel =
+			(KnockDir * FeedbackCfg.KnockbackHorizontalStrength) +
+			FVector(0.0f, 0.0f, FeedbackCfg.KnockbackVerticalStrength);
+
+		// Build full combat payload
+		FCombatHitPayload Payload;
+		Payload.InstigatorActor = PlayerActor;
+		Payload.DamageCauser = MinionActor;
+		Payload.TargetActor = HitActor;
+		if (Hit.ImpactPoint.IsNearlyZero())
+		{
+			Payload.ImpactPoint = HitActor->GetActorLocation();
+		}
+		else
+		{
+			Payload.ImpactPoint = Hit.ImpactPoint;
+		}
+		Payload.ImpactNormal = Hit.ImpactNormal;
+		Payload.KnockbackDirection = KnockDir;
+		Payload.KnockbackVelocity = KnockbackVel;
+		Payload.HeartDamage = FeedbackCfg.HeartDamage; // 1 Heart
+		Payload.WhipChainIndex = LinkIndexInArm;
+		Payload.StaggerDuration = FeedbackCfg.StaggerDuration;
+		Payload.AppliedHitStopDuration = FeedbackCfg.HitStopDuration;
+		Payload.HitResult = Hit;
+
+		// Route through IHitReactableInterface (preferred) or direct UHeartHealthComponent fallback
+		FCombatHitResponse HitResponse;
+		bool bHandledByCombatTarget = false;
+
+		if (IHitReactableInterface* Reactable = Cast<IHitReactableInterface>(HitActor))
+		{
+			HitResponse = Reactable->ReceiveCombatHit(Payload);
+			bHandledByCombatTarget = true;
+		}
+		else if (UHeartHealthComponent* HealthComp = HitActor->FindComponentByClass<UHeartHealthComponent>())
+		{
+			HitResponse = HealthComp->ApplyCombatHit(Payload);
+			bHandledByCombatTarget = true;
+		}
+
+		// Respect target i-frames or already-dead actors so HitStop never triggers on invalid hits
+		if (bHandledByCombatTarget && !HitResponse.bHitAccepted)
+		{
+			continue;
+		}
+
 		HitActorTimestamps.Add(HitActor, CurrentTime);
 
-		const float CalculatedDamage = WhipConfig.BaseDamage + (LinkIndexInArm * WhipConfig.BonusDamagePerLink);
-		const FVector ShotDirection = (EndLoc - StartLoc).GetSafeNormal();
+		if (bHandledByCombatTarget)
+		{
+			Payload.RemainingHearts = HitResponse.RemainingHearts;
+			Payload.MaxHearts = HitResponse.MaxHearts;
+			Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
+			Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
+				? FeedbackCfg.KillHitStopDuration
+				: FeedbackCfg.HitStopDuration;
 
+			if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
+			{
+				FeedbackSub->TriggerCombatFeedback(Payload, FeedbackCfg);
+			}
+
+			OnWhipCombatFeedback.Broadcast(Payload);
+		}
+
+		// Preserve existing UE5 PointDamage + OnWhipDamageHit compatibility
+		const float CalculatedDamage = static_cast<float>(FeedbackCfg.HeartDamage);
 		if (WhipConfig.bApplyEnginePointDamage)
 		{
 			APawn* InstigatorPawn = Cast<APawn>(PlayerActor);
@@ -2334,7 +2410,8 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 
 		if (bDebugDrawSlots)
 		{
-			DrawDebugSphere(World, Hit.ImpactPoint, 28.0f, 12, FColor::Red, false, 0.8f, 0, 2.5f);
+			DrawDebugSphere(World, Payload.ImpactPoint, 28.0f, 12, Payload.bIsKillingBlow ? FColor::Yellow : FColor::Red, false, 0.8f, 0, 2.5f);
+			DrawDebugDirectionalArrow(World, Payload.ImpactPoint, Payload.ImpactPoint + (KnockDir * 120.0f), 25.0f, FColor::Cyan, false, 0.8f, 0, 2.5f);
 		}
 	}
 }

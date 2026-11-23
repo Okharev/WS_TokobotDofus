@@ -1,9 +1,10 @@
-// BirdEnemyCharacter.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "BirdEnemyTypes.h"
+#include "HitReactableInterface.h"
+#include "HeartHealthComponent.h"
 #include "BirdEnemyCharacter.generated.h"
 
 class USphereComponent;
@@ -16,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBirdAttackStartedSignature, AActor*
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBirdAttackHitSignature, AActor*, HitActor, float, DamageDealt);
 
 UCLASS(Blueprintable)
-class WS_TOKOBOTDOFUS_API ABirdEnemyCharacter : public ACharacter
+class WS_TOKOBOTDOFUS_API ABirdEnemyCharacter : public ACharacter, public IHitReactableInterface
 {
     GENERATED_BODY()
 
@@ -30,6 +31,11 @@ public:
 #if WITH_EDITOR
     virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
+    
+    virtual FCombatHitResponse ReceiveCombatHit(const FCombatHitPayload& HitPayload) override;
+
+    UFUNCTION(BlueprintPure, Category = "Bird|Combat")
+    UHeartHealthComponent* GetHealthComponent() const { return HealthComp; }
 
     // --- Designer Events (Bindable in Blueprints, VFX, Audio, UI) ---
     UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
@@ -75,6 +81,15 @@ protected:
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On Attack Hit Target"))
     void BP_OnAttackHit(AActor* HitActor, float DamageDealt);
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
+    TObjectPtr<UHeartHealthComponent> HealthComp;
+
+    UFUNCTION()
+    void HandleStaggerChanged(bool bIsStaggered);
+
+    UFUNCTION()
+    void HandleDeath(const FCombatHitPayload& KillingHit);
 
     // --- Components ---
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
