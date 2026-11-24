@@ -333,7 +333,7 @@ bool UBoarRushComponent::CanClashWithActor(AActor* Candidate) const
 
 	if (!IRushClashInterface::Execute_IsCarryRushing(ClashObj))
 	{
-		return LogReject(TEXT("IsCarryRushing() == false (In Carry Transport instead of active Carry Rush Charge?)"));
+		return LogReject(FString::Printf(TEXT("IsCarryRushing() == false on [%s]"), *GetNameSafe(ClashObj)));
 	}
 
 	const float PlayerSpeed = IRushClashInterface::Execute_GetCarryRushSpeed(ClashObj);
@@ -590,13 +590,20 @@ UObject* UBoarRushComponent::ResolveRushClashObject(AActor* Candidate) const
 		return nullptr;
 	}
 
+	// 1. Prefer a component implementing IRushClashInterface (e.g., UMinionSquadComponent)
+	//    so an unimplemented Blueprint interface on the Character can never shadow it.
+	if (UActorComponent* ClashComp = Candidate->FindComponentByInterface(URushClashInterface::StaticClass()))
+	{
+		return ClashComp;
+	}
+
+	// 2. Fallback to the Actor itself if no component implements it.
 	if (Candidate->Implements<URushClashInterface>())
 	{
 		return Candidate;
 	}
 
-	// Composition lookup: finds UMinionSquadComponent (or any clash-capable component) on the Player
-	return Candidate->FindComponentByInterface(URushClashInterface::StaticClass());
+	return nullptr;
 }
 
 // ============================================================================
