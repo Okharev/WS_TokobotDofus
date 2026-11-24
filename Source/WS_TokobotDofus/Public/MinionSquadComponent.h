@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
 #include "Engine/HitResult.h"
+#include "RushClashInterface.h"
 #include "UObject/ScriptInterface.h"
 #include "CombatFeedbackTypes.h"
 #include "MinionSquadComponent.generated.h"
@@ -226,6 +227,14 @@ struct FMinionCarryRushConfig
 	/** Local offset relative to the Player where the 1 carried minion is held during the jump (e.g. overhead or on the back). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MomentumJump", meta = (EditCondition = "bCarryOneMinionDuringJump"))
 	FVector CarriedMinionLocalOffset = FVector(-25.0f, 0.0f, 55.0f);
+	
+	/** If true, clashing head-on with a rushing enemy drops Carry Stance back to Follow so you can immediately Whip Spin Attack. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RushCharge|Clash")
+	bool bExitCarryStanceOnClash = true;
+
+	/** BOTW heart damage, knockback, HitStop, and camera shake when Carry Rush rams a standard enemy. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "EnemyDamage|BOTWFeedback")
+	FHitFeedbackConfig RamHitFeedback;
 };
 
 // ============================================================================
@@ -353,6 +362,7 @@ public:
 	bool IsRushCharging() const { return bIsRushCharging; }
 	bool IsCarryJumping() const { return bIsCarryJumping; }
 	float GetCurrentRushSpeed() const { return CurrentRushSpeed; }
+	FVector GetCarryRushDirection() const { return CarryRushDirection; }
 
 private:
 	void RestorePlayerMovementSettings();
@@ -423,8 +433,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FVector, LaunchVelocity,
 	float, ForwardSpeed);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnCarryRushClashedSignature,
+	AActor*, ClashedOpponent,
+	FVector, RecoilVelocity);
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class WS_TOKOBOTDOFUS_API UMinionSquadComponent : public USceneComponent
+class WS_TOKOBOTDOFUS_API UMinionSquadComponent : public USceneComponent, public IRushClashInterface
 {
 	GENERATED_BODY()
 
@@ -589,6 +604,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "PikminSquad|Throw")
 	bool CanWorldLocationReachPlayer(const FVector& WorldLocation) const;
 	// ~End Throw, Recall & Checkpoint Reset API
+	
+	// Add inside Blueprint Event Dispatchers:
+	/** Fires when Carry Rush cancels head-on against a rushing enemy (e.g., Boar). Bind clash VFX/SFX/Anim here. */
+	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
+	FOnCarryRushClashedSignature OnCarryRushClashed;
+
+	// ~Begin IRushClashInterface
+	virtual bool IsCarryRushing_Implementation() const override;
+	virtual float GetCarryRushSpeed_Implementation() const override;
+	virtual FVector GetCarryRushDirection_Implementation() const override;
+	virtual void OnRushClashed_Implementation(AActor* ClashedOpponent, const FVector& RecoilVelocity) override;
 
 protected:
 	virtual void BeginPlay() override;

@@ -104,6 +104,9 @@ struct FCombatHitPayload
 
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	FHitResult HitResult;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	FName AttackType = NAME_None; // e.g., "Whip", "CarryRush", "SpinAttack"
 };
 
 /** Returned synchronously by the victim so the attacker knows whether to trigger normal vs. lethal feedback. */
