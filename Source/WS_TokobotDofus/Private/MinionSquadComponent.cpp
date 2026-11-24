@@ -1303,7 +1303,7 @@ FVector UMinionStance_CarryRush::CalculatePalanquinSlotLocation(
 
 void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepStart, const FVector& SweepEnd)
 {
-	if (!Squad) return;
+	if (!Squad || !bIsRushCharging) return;
 
 	UWorld* World = Squad->GetWorld();
 	AActor* PlayerActor = Squad->GetOwner();
@@ -1324,7 +1324,7 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 	const FVector ExtendedEnd = SweepEnd + (CarryRushDirection * 45.0f);
 
 	TArray<FHitResult> HitResults;
-	const bool bHit = World->SweepMultiByChannel(
+	World->SweepMultiByChannel(
 		HitResults,
 		SweepStart,
 		ExtendedEnd,
@@ -1343,6 +1343,7 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 		FVector2D(0.0f, 1.0f),
 		CurrentRushSpeed);
 	const float RamDamage = Cfg.BaseRamDamage + (SpeedAlpha * Cfg.MaxSpeedBonusDamage);
+	const FHitFeedbackConfig& FeedbackCfg = Cfg.RamHitFeedback;
 
 	for (const FHitResult& Hit : HitResults)
 	{
@@ -1352,17 +1353,104 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 			continue;
 		}
 
+		if (const double* LastHit = Squad->HitActorTimestamps.Find(HitActor))
+		{
+			if ((CurrentTime - *LastHit) < 0.4) continue;
+		}
+
+		// Build unified combat payload (mirrors PerformWhipHitSweep)
+		const FVector ToEnemy = (HitActor->GetActorLocation() - PlayerActor->GetActorLocation()).GetSafeNormal2D();
+		FVector KnockDir = (CarryRushDirection * 0.5f + ToEnemy * 0.5f).GetSafeNormal2D();
+		if (KnockDir.IsNearlyZero())
+		{
+			KnockDir = CarryRushDirection;
+		}
+
+		const float KnockHoriz = (FeedbackCfg.KnockbackHorizontalStrength > KINDA_SMALL_NUMBER)
+			? FeedbackCfg.KnockbackHorizontalStrength
+			: Cfg.EnemyKnockbackStrength;
+		const float KnockVert = (FeedbackCfg.KnockbackVerticalStrength > KINDA_SMALL_NUMBER)
+			? FeedbackCfg.KnockbackVerticalStrength
+			: 380.0f;
+
+		FCombatHitPayload Payload;
+		Payload.InstigatorActor = PlayerActor;
+		Payload.DamageCauser = PlayerActor;
+		Payload.TargetActor = HitActor;
+		Payload.AttackType = FName("CarryRush");
+		if (Hit.ImpactPoint.IsNearlyZero())
+		{
+			Payload.ImpactPoint = HitActor->GetActorLocation();
+		}
+		else
+		{
+			Payload.ImpactPoint = Hit.ImpactPoint;
+		}
+		Payload.ImpactNormal = Hit.ImpactNormal;
+		Payload.KnockbackDirection = KnockDir;
+		Payload.KnockbackVelocity = (KnockDir * KnockHoriz) + FVector(0.0f, 0.0f, KnockVert);
+		Payload.HeartDamage = FMath::Max(1, FeedbackCfg.HeartDamage);
+		Payload.StaggerDuration = FeedbackCfg.StaggerDuration;
+		Payload.AppliedHitStopDuration = FeedbackCfg.HitStopDuration;
+		Payload.HitResult = Hit;
+
+		FCombatHitResponse HitResponse;
+		bool bHandledByCombatTarget = false;
+
+		if (IHitReactableInterface* Reactable = Cast<IHitReactableInterface>(HitActor))
+		{
+			// NOTE: If HitActor is a rushing Boar and our speed qualifies, ReceiveCombatHit
+			// resolves the clash, calls Squad->OnRushClashed (setting bIsRushCharging = false),
+			// and returns bHitAccepted = false.
+			HitResponse = Reactable->ReceiveCombatHit(Payload);
+			bHandledByCombatTarget = true;
+		}
+		else if (UHeartHealthComponent* HealthComp = HitActor->FindComponentByClass<UHeartHealthComponent>())
+		{
+			HitResponse = HealthComp->ApplyCombatHit(Payload);
+			bHandledByCombatTarget = true;
+		}
+
+		// Immediately abort sweep if a clash stopped our rush on this hit
+		if (!bIsRushCharging)
+		{
+			return;
+		}
+
+		// Respect clash, i-frames, or armored hide deflection (do NOT launch or damage deflected targets)
+		if (bHandledByCombatTarget && !HitResponse.bHitAccepted)
+		{
+			Squad->HitActorTimestamps.Add(HitActor, CurrentTime);
+			continue;
+		}
+
+		Squad->HitActorTimestamps.Add(HitActor, CurrentTime);
+
 		if (PlayerRoot)
 		{
 			PlayerRoot->IgnoreActorWhenMoving(HitActor, true);
 			RushIgnoredEnemies.AddUnique(HitActor);
 		}
 
-		if (const double* LastHit = Squad->HitActorTimestamps.Find(HitActor))
+		if (bHandledByCombatTarget)
 		{
-			if ((CurrentTime - *LastHit) < 0.4) continue;
+			Payload.RemainingHearts = HitResponse.RemainingHearts;
+			Payload.MaxHearts = HitResponse.MaxHearts;
+			Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
+			Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
+				? FeedbackCfg.KillHitStopDuration
+				: FeedbackCfg.HitStopDuration;
+
+			if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
+			{
+				FeedbackSub->TriggerCombatFeedback(Payload, FeedbackCfg);
+			}
 		}
-		Squad->HitActorTimestamps.Add(HitActor, CurrentTime);
+		else if (ACharacter* HitEnemyChar = Cast<ACharacter>(HitActor))
+		{
+			// Legacy fallback for pawns without UHeartHealthComponent
+			HitEnemyChar->LaunchCharacter(Payload.KnockbackVelocity, true, true);
+		}
 
 		if (Squad->WhipConfig.bApplyEnginePointDamage)
 		{
@@ -1380,14 +1468,6 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 				InstigatorController,
 				PlayerActor,
 				DmgType);
-		}
-
-		if (ACharacter* HitEnemyChar = Cast<ACharacter>(HitActor))
-		{
-			const FVector ToEnemy = (HitEnemyChar->GetActorLocation() - PlayerActor->GetActorLocation()).GetSafeNormal2D();
-			const FVector KnockDir = (CarryRushDirection * 0.5f + ToEnemy * 0.5f).GetSafeNormal2D();
-			const FVector LaunchVel = (KnockDir * Cfg.EnemyKnockbackStrength) + FVector(0.0f, 0.0f, 380.0f);
-			HitEnemyChar->LaunchCharacter(LaunchVel, true, true);
 		}
 
 		Squad->OnCarryRushEnemyHit.Broadcast(HitActor, RamDamage, CurrentRushSpeed, Hit);
@@ -1463,6 +1543,12 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 			const FVector DesiredStep = CarryRushDirection * (CurrentRushSpeed * DeltaTime);
 
 			PerformFrontEnemyBumperSweep(StartPlayerLoc, StartPlayerLoc + DesiredStep);
+
+			// A head-on clash inside the sweep may have canceled the rush and launched the player backward
+			if (!bIsRushCharging)
+			{
+				return;
+			}
 
 			if (MoveComp && PlayerChar)
 			{
@@ -2184,6 +2270,60 @@ bool UMinionSquadComponent::CanWorldLocationReachPlayer(const FVector& WorldLoca
 	return NavSys->TestPathSync(PathQuery, EPathFindingMode::Regular);
 }
 
+// ============================================================================
+// IRushClashInterface IMPLEMENTATION (Head-on Clash with Rushing Enemies)
+// ============================================================================
+
+bool UMinionSquadComponent::IsCarryRushing_Implementation() const
+{
+	return IsCarryRushCharging();
+}
+
+float UMinionSquadComponent::GetCarryRushSpeed_Implementation() const
+{
+	return GetCurrentCarryRushSpeed();
+}
+
+FVector UMinionSquadComponent::GetCarryRushDirection_Implementation() const
+{
+	if (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
+	{
+		return CarryRushStanceInstance->GetCarryRushDirection();
+	}
+	return GetOwner() ? GetOwner()->GetActorForwardVector().GetSafeNormal2D() : FVector::ForwardVector;
+}
+
+void UMinionSquadComponent::OnRushClashed_Implementation(AActor* ClashedOpponent, const FVector& RecoilVelocity)
+{
+	// 1. Prevent residual bumper sweeps from re-hitting the clashed opponent on the same frame
+	if (UWorld* World = GetWorld())
+	{
+		if (IsValid(ClashedOpponent))
+		{
+			HitActorTimestamps.Add(ClashedOpponent, World->GetTimeSeconds());
+		}
+	}
+
+	// 2. Cancel Carry Rush (dropping back to Follow lets the player immediately follow up with Whip Spin Attack)
+	StopCarryRushCharge(CarryRushConfig.bExitCarryStanceOnClash);
+
+	// 3. Apply bounce-back recoil to the Player
+	if (ACharacter* PlayerChar = Cast<ACharacter>(GetOwner()))
+	{
+		if (UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement())
+		{
+			MoveComp->StopActiveMovement();
+		}
+		PlayerChar->LaunchCharacter(RecoilVelocity, true, true);
+	}
+
+	OnCarryRushClashed.Broadcast(ClashedOpponent, RecoilVelocity);
+	BroadcastDebug(
+		FString::Printf(TEXT("CARRY RUSH CLASHED with %s!"), *GetNameSafe(ClashedOpponent)),
+		FColor::Cyan,
+		2.5f);
+}
+
 AActor* UMinionSquadComponent::FindBestThrowableMinion(const FVector& ReferenceOrigin, float MaxGrabDistance) const
 {
 	UWorld* World = GetWorld();
@@ -2640,6 +2780,7 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 		Payload.InstigatorActor = PlayerActor;
 		Payload.DamageCauser = MinionActor;
 		Payload.TargetActor = HitActor;
+		Payload.AttackType = FName("SpinAttack");
 		if (Hit.ImpactPoint.IsNearlyZero())
 		{
 			Payload.ImpactPoint = HitActor->GetActorLocation();
