@@ -56,4 +56,17 @@ public:
 	virtual bool HasInteractableWaitAnchor() const = 0;
 	virtual FVector GetInteractableWaitAnchor() const = 0;
 	virtual void ClearInteractableWaitAnchor() = 0;
+
+	// --- Foolproof Follow, Corridor, Anti-Stuck & Throw Grace API ---
+	/** Scales Detour Crowd separation down on thin bridges/corridors so minions don't shove each other off edges. */
+	virtual void SetTightCorridorMode(bool bTight) {}
+
+	/** Adjusts MaxWalkSpeed smoothly based on slot distance and leader speed (no Tick required). */
+	virtual void UpdateFollowSpeedForDistance(float DistanceToSlot, float LeaderSpeed) {}
+
+	/** Tiered anti-stuck recovery (1 = brief crowd pause + repath, 2 = unsnag hop, 3 = safe catch-up warp). */
+	virtual void ExecuteUnstuckRecovery(int32 RecoveryTier, const FVector& TargetLocation) {}
+
+	/** Returns false during post-bounce grace period or busy states so rapid throws cycle across the squad. */
+	virtual bool CanBeThrown() const { return true; }
 };
