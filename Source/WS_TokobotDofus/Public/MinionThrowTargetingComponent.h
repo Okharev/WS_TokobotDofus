@@ -6,6 +6,7 @@
 
 class UMinionThrowTargetComponent;
 class UMinionSquadComponent;
+class UCombatLockOnComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FOnThrowLockedTargetChangedSignature,
@@ -18,9 +19,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	UMinionThrowTargetComponent*, TargetComponent);
 
 /**
- * Attach to the Player Character alongside UMinionSquadComponent.
- * Scores throw targets inside the camera view cone (Sekiro / The Pathless style, no camera changes)
- * and handles single-tap instant throws, live throw arc previews, and debug visualization.
+ * Attach to the Player Character alongside UMinionSquadComponent and UCombatLockOnComponent.
+ * Scores throw targets inside the camera view cone and automatically prioritizes the Z-Targeted enemy.
  */
 UCLASS(ClassGroup = (MinionInteraction), meta = (BlueprintSpawnableComponent))
 class WS_TOKOBOTDOFUS_API UMinionThrowTargetingComponent : public UActorComponent
@@ -69,6 +69,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting", meta = (ClampMin = "0.0", ClampMax = "0.5"))
 	float LockHysteresisBonus = 0.12f;
 
+	/** If true, Z-Targeting an enemy strongly biases minion throws onto that enemy's throw target. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy")
+	bool bPrioritizeCombatLockTarget = true;
+
+	/** Allows throwing minions at a Z-Targeted enemy even if they sit near the edge of a fixed camera view. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy", meta = (EditCondition = "bPrioritizeCombatLockTarget"))
+	bool bAllowLockedTargetOutsideCone = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy", meta = (EditCondition = "bPrioritizeCombatLockTarget", ClampMin = "0.5"))
+	float CombatLockScoreBonus = 2.5f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting")
 	TEnumAsByte<ECollisionChannel> LineOfSightChannel = ECC_Visibility;
 
@@ -106,6 +117,7 @@ private:
 	};
 
 	void EvaluateTargets();
+	UMinionThrowTargetComponent* ResolveCombatLockedThrowTarget() const;
 	bool GetPlayerViewPoint(FVector& OutViewLoc, FVector& OutViewForward) const;
 	bool HasLineOfSightToTarget(const FVector& TraceStart, const UMinionThrowTargetComponent* TargetComp) const;
 	FVector GetLaunchOriginWorld() const;
@@ -113,6 +125,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMinionSquadComponent> CachedSquadComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCombatLockOnComponent> CachedLockOnComponent = nullptr;
 
 	TWeakObjectPtr<UMinionThrowTargetComponent> LockedTarget;
 	float LockedTargetScore = 0.0f;
