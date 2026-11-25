@@ -125,13 +125,41 @@ bool UCombatLockOnComponent::HasLineOfSightToTarget(const UCombatLockOnTargetCom
 
 bool UCombatLockOnComponent::ToggleOrAcquireLock()
 {
-	if (LockedTarget.IsValid())
+	if (!LockedTarget.IsValid())
 	{
-		ReleaseLock();
-		return false;
+		return AcquireLock();
 	}
 
-	return AcquireLock();
+	switch (RepressBehavior)
+	{
+	case ELockOnRepressBehavior::ToggleOff:
+		ReleaseLock();
+		return false;
+
+	case ELockOnRepressBehavior::CycleThenRelease:
+		// Visit each valid enemy around the player once; release after the full sweep
+		if (CycleNextTarget(/*bOnlyUnvisited=*/ true))
+		{
+			return true;
+		}
+		ReleaseLock();
+		return false;
+
+	case ELockOnRepressBehavior::CycleAndWrap:
+		// Keep sweeping clockwise around the player indefinitely
+		if (CycleNextTarget(/*bOnlyUnvisited=*/ false))
+		{
+			return true;
+		}
+		if (bReleaseIfNoOtherCycleTarget)
+		{
+			ReleaseLock();
+			return false;
+		}
+		return true;
+	}
+
+	return LockedTarget.IsValid();
 }
 
 bool UCombatLockOnComponent::AcquireLock()
@@ -154,6 +182,112 @@ bool UCombatLockOnComponent::AcquireLock()
 		Director->RequestCameraCenterSnap();
 	}
 	OnRequestCameraCenterSnap.Broadcast();
+	return false;
+}
+
+bool UCombatLockOnComponent::CycleNextTarget(bool bOnlyUnvisited)
+{
+	UWorld* World = GetWorld();
+	AActor* OwnerActor = GetOwner();
+	UCombatLockOnTargetComponent* CurrentTarget = LockedTarget.Get();
+	if (!World || !OwnerActor || !CurrentTarget)
+	{
+		return false;
+	}
+
+	UCombatLockOnSubsystem* Sub = World->GetSubsystem<UCombatLockOnSubsystem>();
+	if (!Sub)
+	{
+		return false;
+	}
+
+	// Prune stale weak pointers from visited list
+	VisitedCycleTargets.RemoveAllSwap([](const TWeakObjectPtr<UCombatLockOnTargetComponent>& Entry)
+	{
+		return !Entry.IsValid();
+	});
+
+	const FVector PlayerLoc = OwnerActor->GetActorLocation();
+	FVector ReferenceDir = (CurrentTarget->GetLockWorldLocation() - PlayerLoc).GetSafeNormal2D();
+	if (ReferenceDir.IsNearlyZero())
+	{
+		ReferenceDir = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
+	}
+
+	const float GlobalSearchLimit = (CycleSearchRadius > KINDA_SMALL_NUMBER) ? CycleSearchRadius : MaxGlobalLockRange;
+
+	struct FCycleCandidate
+	{
+		UCombatLockOnTargetComponent* Target = nullptr;
+		float SweepAngle = 0.0f; // [0, 2*PI) around player from ReferenceDir
+		float DistSq = 0.0f;
+	};
+	TArray<FCycleCandidate, TInlineAllocator<16>> Candidates;
+
+	for (const TWeakObjectPtr<UCombatLockOnTargetComponent>& WeakCandidate : Sub->GetRegisteredTargets())
+	{
+		UCombatLockOnTargetComponent* Candidate = WeakCandidate.Get();
+		if (!IsValid(Candidate) || Candidate == CurrentTarget || !Candidate->CanBeLockedOn())
+		{
+			continue;
+		}
+
+		if (bOnlyUnvisited && VisitedCycleTargets.Contains(WeakCandidate))
+		{
+			continue;
+		}
+
+		const FVector CandLoc = Candidate->GetLockWorldLocation();
+		const float EffectiveRange = FMath::Min(GlobalSearchLimit, Candidate->GetMaxLockDistance());
+		const float DistSq = FVector::DistSquared(PlayerLoc, CandLoc);
+		if (DistSq > FMath::Square(EffectiveRange))
+		{
+			continue;
+		}
+
+		const FVector ToCand2D = (CandLoc - PlayerLoc).GetSafeNormal2D();
+		if (ToCand2D.IsNearlyZero())
+		{
+			continue;
+		}
+
+		// In UE's left-handed Z-up space: Cross(ReferenceDir, ToCand2D).Z > 0 is clockwise from above
+		const float Dot = FVector::DotProduct(ReferenceDir, ToCand2D);
+		const float CrossZ = FVector::CrossProduct(ReferenceDir, ToCand2D).Z;
+		float Angle = FMath::Atan2(bCycleClockwise ? CrossZ : -CrossZ, Dot); // (-PI, PI]
+		if (Angle <= 0.0f)
+		{
+			Angle += 2.0f * PI; // Wrap to (0, 2*PI] so 0 is strictly ahead in sweep direction
+		}
+
+		Candidates.Add({ Candidate, Angle, DistSq });
+	}
+
+	if (Candidates.Num() == 0)
+	{
+		return false;
+	}
+
+	// Sort by sweep angle around player; break near-identical angle ties by closest distance
+	Candidates.Sort([](const FCycleCandidate& A, const FCycleCandidate& B)
+	{
+		if (FMath::IsNearlyEqual(A.SweepAngle, B.SweepAngle, 0.03f)) // ~1.7 degrees
+		{
+			return A.DistSq < B.DistSq;
+		}
+		return A.SweepAngle < B.SweepAngle;
+	});
+
+	// Deferred LOS check: pick the first visible enemy in clockwise order
+	for (const FCycleCandidate& Entry : Candidates)
+	{
+		if (HasLineOfSightToTarget(Entry.Target))
+		{
+			SetLockedTargetInternal(Entry.Target);
+			return true;
+		}
+	}
+
 	return false;
 }
 
@@ -410,6 +544,8 @@ void UCombatLockOnComponent::SetLockedTargetInternal(UCombatLockOnTargetComponen
 	// 2. Bind new target & toggle movement / tick / timer states
 	if (IsValid(NewTarget))
 	{
+		VisitedCycleTargets.AddUnique(NewTarget);
+
 		TargetInvalidatedHandle = NewTarget->OnTargetInvalidated.AddUObject(
 			this, &UCombatLockOnComponent::HandleTargetInvalidated);
 		NewTarget->NotifyLockFocusState(true);
@@ -438,6 +574,8 @@ void UCombatLockOnComponent::SetLockedTargetInternal(UCombatLockOnTargetComponen
 	}
 	else
 	{
+		VisitedCycleTargets.Reset();
+
 		if (World)
 		{
 			World->GetTimerManager().ClearTimer(ValidationTimerHandle);
