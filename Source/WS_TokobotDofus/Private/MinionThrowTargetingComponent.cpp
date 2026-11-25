@@ -3,6 +3,8 @@
 #include "MinionThrowTargetComponent.h"
 #include "MinionSquadComponent.h"
 #include "MinionAgentInterface.h"
+#include "CombatLockOnComponent.h"
+#include "CombatLockOnTargetComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
@@ -23,6 +25,7 @@ void UMinionThrowTargetingComponent::BeginPlay()
 	if (AActor* OwnerActor = GetOwner())
 	{
 		CachedSquadComponent = OwnerActor->FindComponentByClass<UMinionSquadComponent>();
+		CachedLockOnComponent = OwnerActor->FindComponentByClass<UCombatLockOnComponent>();
 	}
 
 	if (UWorld* World = GetWorld())
@@ -58,6 +61,21 @@ void UMinionThrowTargetingComponent::UpdateDebugTickState()
 {
 	const bool bNeedsTick = bDebugDrawTargeting || bDebugDrawThrowArc;
 	SetComponentTickEnabled(bNeedsTick);
+}
+
+UMinionThrowTargetComponent* UMinionThrowTargetingComponent::ResolveCombatLockedThrowTarget() const
+{
+	if (!bPrioritizeCombatLockTarget || !CachedLockOnComponent)
+	{
+		return nullptr;
+	}
+
+	if (const UCombatLockOnTargetComponent* CombatTarget = CachedLockOnComponent->GetLockedTarget())
+	{
+		return CombatTarget->ResolveLinkedThrowTarget();
+	}
+
+	return nullptr;
 }
 
 bool UMinionThrowTargetingComponent::GetPlayerViewPoint(FVector& OutViewLoc, FVector& OutViewForward) const
@@ -159,6 +177,7 @@ void UMinionThrowTargetingComponent::EvaluateTargets()
 	const FVector PlayerLoc = OwnerActor->GetActorLocation();
 	const FVector LaunchOrigin = GetLaunchOriginWorld();
 	const float CosHalfCone = FMath::Cos(FMath::DegreesToRadians(AimConeHalfAngleDegrees));
+	const UMinionThrowTargetComponent* CombatLockedThrowTarget = ResolveCombatLockedThrowTarget();
 
 	TArray<TWeakObjectPtr<UMinionThrowTargetComponent>> PrevCandidates = MoveTemp(ActiveConeCandidates);
 	ActiveConeCandidates.Reset();
@@ -174,6 +193,7 @@ void UMinionThrowTargetingComponent::EvaluateTargets()
 			continue;
 		}
 
+		const bool bIsCombatLockedTarget = (TargetComp == CombatLockedThrowTarget);
 		const FVector TargetLoc = TargetComp->GetComponentLocation();
 		const float EffectiveMaxRange = FMath::Min(MaxGlobalThrowRange, TargetComp->GetMaxTargetRange());
 		const float DistFromPlayerSq = FVector::DistSquared(PlayerLoc, TargetLoc);
@@ -184,13 +204,16 @@ void UMinionThrowTargetingComponent::EvaluateTargets()
 
 		const FVector CamToTargetDir = (TargetLoc - CamLoc).GetSafeNormal();
 		const float Dot = FVector::DotProduct(CamForward, CamToTargetDir);
-		if (Dot < CosHalfCone)
+
+		if (Dot < CosHalfCone && !(bIsCombatLockedTarget && bAllowLockedTargetOutsideCone))
 		{
 			continue;
 		}
 
 		const float DistFromPlayer = FMath::Sqrt(DistFromPlayerSq);
-		const float AngleNorm = FMath::Clamp((Dot - CosHalfCone) / FMath::Max(1.0f - CosHalfCone, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+		const float AngleNorm = bIsCombatLockedTarget
+			? 1.0f
+			: FMath::Clamp((Dot - CosHalfCone) / FMath::Max(1.0f - CosHalfCone, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
 		const float DistNorm = 1.0f - FMath::Clamp(DistFromPlayer / FMath::Max(EffectiveMaxRange, 1.0f), 0.0f, 1.0f);
 		const float PriorityNorm = FMath::Clamp(TargetComp->GetPriorityWeight() * 0.5f, 0.0f, 1.0f);
 
@@ -198,6 +221,10 @@ void UMinionThrowTargetingComponent::EvaluateTargets()
 		if (TargetComp == LockedTarget.Get())
 		{
 			Score += LockHysteresisBonus;
+		}
+		if (bIsCombatLockedTarget)
+		{
+			Score += CombatLockScoreBonus;
 		}
 
 		ScoredCandidates.Add({ TargetComp, Score, DistFromPlayer });
