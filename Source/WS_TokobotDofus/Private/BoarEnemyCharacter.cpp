@@ -68,7 +68,8 @@ void ABoarEnemyCharacter::BeginPlay()
 	{
 		RushComp->Initialize(&Tuning, RushHitOrigin);
 		RushComp->OnRushClashed.AddUniqueDynamic(this, &ABoarEnemyCharacter::HandleRushClashed);
-		RushComp->OnStunVulnerabilityChanged.AddUniqueDynamic(this, &ABoarEnemyCharacter::HandleStunVulnerabilityChanged);
+		RushComp->OnStunVulnerabilityChanged.AddUniqueDynamic(
+			this, &ABoarEnemyCharacter::HandleStunVulnerabilityChanged);
 		RushComp->OnRushHitPlayer.AddUniqueDynamic(this, &ABoarEnemyCharacter::HandleRushHitPlayer);
 	}
 
@@ -110,15 +111,16 @@ void ABoarEnemyCharacter::UpdateAnimTelemetry()
 	{
 		const int32 CurHearts = HealthComp ? HealthComp->GetCurrentHearts() : -1;
 		const int32 MaxH = HealthComp ? HealthComp->GetMaxHearts() : -1;
-		const FString StateStr = StaticEnum<EBoarAIState>()->GetNameStringByValue(static_cast<int64>(AnimState.CurrentAIState));
+		const FString StateStr = StaticEnum<EBoarAIState>()->GetNameStringByValue(
+			static_cast<int64>(AnimState.CurrentAIState));
 
 		DrawDebugString(
 			GetWorld(),
 			GetActorLocation() + FVector(0.f, 0.f, 95.f),
 			FString::Printf(TEXT("Boar [%s] | Hearts: %d/%d | Stunned: %d | Charge: %.0f%%"),
-				*StateStr, CurHearts, MaxH,
-				AnimState.bIsStunnedVulnerable ? 1 : 0,
-				AnimState.ChargeUpAlpha * 100.f),
+			                *StateStr, CurHearts, MaxH,
+			                AnimState.bIsStunnedVulnerable ? 1 : 0,
+			                AnimState.ChargeUpAlpha * 100.f),
 			nullptr,
 			AnimState.bIsStunnedVulnerable ? FColor::Cyan : FColor::White,
 			0.f,
@@ -181,8 +183,8 @@ FCombatHitResponse ABoarEnemyCharacter::ReceiveCombatHit(const FCombatHitPayload
 	}
 
 	AActor* Attacker = HitPayload.InstigatorActor
-		? HitPayload.InstigatorActor.Get()
-		: HitPayload.DamageCauser.Get();
+		                   ? HitPayload.InstigatorActor.Get()
+		                   : HitPayload.DamageCauser.Get();
 
 	// 1. Mid-Rush: intercept Carry Rush for head-on clash; deflect everything else (rush super-armor)
 	if (RushComp && RushComp->IsRushing())

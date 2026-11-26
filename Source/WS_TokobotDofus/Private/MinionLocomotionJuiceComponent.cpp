@@ -83,8 +83,8 @@ void UMinionLocomotionJuiceComponent::TickComponent(
 		{
 			const EMinionState State = Agent->GetMinionState();
 			bAllowTilt = (State == EMinionState::Idle ||
-						  State == EMinionState::Following ||
-						  State == EMinionState::EvadingPlayer);
+				State == EMinionState::Following ||
+				State == EMinionState::EvadingPlayer);
 		}
 	}
 
@@ -130,7 +130,8 @@ void UMinionLocomotionJuiceComponent::TickComponent(
 	}
 
 	// Only bank noticeably once actually moving past a slow shuffle
-	const float BankSpeedGate = FMath::GetMappedRangeValueClamped(FVector2D(0.35f, 0.9f), FVector2D(0.0f, 1.0f), SpeedAlpha);
+	const float BankSpeedGate = FMath::GetMappedRangeValueClamped(FVector2D(0.35f, 0.9f), FVector2D(0.0f, 1.0f),
+	                                                              SpeedAlpha);
 	const float TargetBank = FMath::Clamp(
 		EffectiveYawRate * BankSensitivity * BankSpeedGate,
 		-MaxBankRollDegrees,
@@ -147,20 +148,23 @@ void UMinionLocomotionJuiceComponent::TickComponent(
 	if (ForwardAccel >= -150.0f)
 	{
 		// Steady run lean proportional to speed (no jittery accel spikes)
-		const float RunLean = FMath::GetMappedRangeValueClamped(FVector2D(0.25f, 1.0f), FVector2D(0.0f, 0.75f), SpeedAlpha);
-		const float PushLean = FMath::Clamp(FMath::Max(ForwardAccel, 0.0f) / FMath::Max(ReferenceAcceleration, 1.0f), 0.0f, 0.35f);
+		const float RunLean = FMath::GetMappedRangeValueClamped(FVector2D(0.25f, 1.0f), FVector2D(0.0f, 0.75f),
+		                                                        SpeedAlpha);
+		const float PushLean = FMath::Clamp(FMath::Max(ForwardAccel, 0.0f) / FMath::Max(ReferenceAcceleration, 1.0f),
+		                                    0.0f, 0.35f);
 		TargetPitch = -FMath::Clamp(RunLean + PushLean, 0.0f, 1.0f) * MaxForwardLeanDegrees;
 	}
 	else
 	{
-		const float BrakeNorm = FMath::Clamp((-ForwardAccel - 150.0f) / FMath::Max(ReferenceAcceleration, 1.0f), 0.0f, 1.0f);
+		const float BrakeNorm = FMath::Clamp((-ForwardAccel - 150.0f) / FMath::Max(ReferenceAcceleration, 1.0f), 0.0f,
+		                                     1.0f);
 		TargetPitch = BrakeNorm * MaxBrakeLeanBackDegrees;
 	}
 
 	// 4. Hard Brake Detection (only when coming down from a real sprint, never mid-crowd-shuffle)
 	RecentPeakSpeed = (Speed2D > RecentPeakSpeed)
-		? Speed2D
-		: FMath::FInterpTo(RecentPeakSpeed, Speed2D, ClampedDt, 2.5f);
+		                  ? Speed2D
+		                  : FMath::FInterpTo(RecentPeakSpeed, Speed2D, ClampedDt, 2.5f);
 
 	BrakeCooldown = FMath::Max(0.0f, BrakeCooldown - ClampedDt);
 	const bool bRealStopFromSprint = (RecentPeakSpeed > ReferenceMaxSpeed * 0.75f) &&
@@ -182,7 +186,8 @@ void UMinionLocomotionJuiceComponent::TickComponent(
 	float WaddleOffset = 0.0f;
 	if (SpeedAlpha > 0.15f && MaxWaddleRollDegrees > KINDA_SMALL_NUMBER)
 	{
-		WaddlePhase = FMath::Fmod(WaddlePhase + (ClampedDt * WaddleFrequency * FMath::Clamp(SpeedAlpha, 0.5f, 1.25f)), 2.0f * PI);
+		WaddlePhase = FMath::Fmod(WaddlePhase + (ClampedDt * WaddleFrequency * FMath::Clamp(SpeedAlpha, 0.5f, 1.25f)),
+		                          2.0f * PI);
 		WaddleOffset = FMath::Sin(WaddlePhase) * MaxWaddleRollDegrees * FMath::Min(SpeedAlpha, 1.0f);
 	}
 

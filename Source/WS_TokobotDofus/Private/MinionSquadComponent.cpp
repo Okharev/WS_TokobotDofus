@@ -29,7 +29,10 @@
 
 void UMinionStance_Follow::OnEnterStance()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	AActor* PlayerActor = Squad->GetOwner();
 	UWorld* World = Squad->GetWorld();
@@ -112,13 +115,16 @@ void UMinionStance_Follow::ForceImmediateEvaluation()
 
 FVector UMinionStance_Follow::CalculateSlotAroundTransform(int32 SlotIndex, const FTransform& AnchorTransform) const
 {
-	if (!Squad) return AnchorTransform.GetLocation();
+	if (!Squad)
+	{
+		return AnchorTransform.GetLocation();
+	}
 
 	constexpr int32 ColumnsPerRow = 4;
 	const int32 Row = SlotIndex / ColumnsPerRow;
 	const int32 Col = SlotIndex % ColumnsPerRow;
 
-	const float CenterOffset = (ColumnsPerRow - 1) * 0.5f;
+	constexpr float CenterOffset = (ColumnsPerRow - 1) * 0.5f;
 	const float NormalizedCol = FMath::Abs(Col - CenterOffset);
 	const float CrescentPullback = (NormalizedCol > 1.0f) ? 25.0f : 0.0f;
 
@@ -131,14 +137,23 @@ FVector UMinionStance_Follow::CalculateSlotAroundTransform(int32 SlotIndex, cons
 
 void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	AActor* PlayerActor = Squad->GetOwner();
 	UWorld* World = Squad->GetWorld();
-	if (!PlayerActor || !World) return;
+	if (!PlayerActor || !World)
+	{
+		return;
+	}
 
 	const int32 MinionCount = Squad->PruneInvalidMinions();
-	if (MinionCount == 0) return;
+	if (MinionCount == 0)
+	{
+		return;
+	}
 
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 	const ANavigationData* NavData = NavSys ? NavSys->GetDefaultNavDataInstance() : nullptr;
@@ -168,7 +183,10 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 		{
 			AActor* MinionActor = Squad->ActiveMinions[i];
 			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[i].GetInterface();
-			if (!MinionActor || !MinionInterface) continue;
+			if (!MinionActor || !MinionInterface)
+			{
+				continue;
+			}
 
 			const EMinionState State = MinionInterface->GetMinionState();
 			if (State == EMinionState::InCarryRush ||
@@ -184,8 +202,10 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 			if (MinionChar && MinionChar->GetMovementBase() == PlayerMoveBase)
 			{
 				MinionInterface->SetTightCorridorMode(true);
-				const float Angle = (2.0f * PI * static_cast<float>(i)) / static_cast<float>(FMath::Max(MinionCount, 1));
-				const FVector LocalSlot = PlayerLocation + FVector(FMath::Cos(Angle) * 75.0f, FMath::Sin(Angle) * 75.0f, 0.0f);
+				const float Angle = (2.0f * PI * static_cast<float>(i)) / static_cast<float>(
+					FMath::Max(MinionCount, 1));
+				const FVector LocalSlot = PlayerLocation + FVector(FMath::Cos(Angle) * 75.0f, FMath::Sin(Angle) * 75.0f,
+				                                                   0.0f);
 				const float DistToSlot = FVector::Dist2D(MinionActor->GetActorLocation(), LocalSlot);
 				MinionInterface->UpdateFollowSpeedForDistance(DistToSlot, PlayerSpeed2D);
 				if (DistToSlot > 35.0f)
@@ -215,7 +235,10 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 	for (int32 i = 0; i < MinionCount; ++i)
 	{
 		IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[i].GetInterface();
-		if (!MinionInterface) continue;
+		if (!MinionInterface)
+		{
+			continue;
+		}
 
 		const EMinionState State = MinionInterface->GetMinionState();
 		if (State == EMinionState::InCarryRush ||
@@ -241,7 +264,8 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 	}
 
 	// Only advance WaitingGroupAnchorTransform when grounded AND all follow minions can reach the player
-	if (bPlayerGroundedOnNav && StrandedAtTakeoffIndices.IsEmpty() && StrandedAtInteractableIndices.IsEmpty() && !ReachableIndices.IsEmpty())
+	if (bPlayerGroundedOnNav && StrandedAtTakeoffIndices.IsEmpty() && StrandedAtInteractableIndices.IsEmpty() && !
+		ReachableIndices.IsEmpty())
 	{
 		const FVector TrailForward = (-FormationSolver.GetLastValidTrailBackDir()).GetSafeNormal2D();
 		WaitingGroupAnchorTransform = FTransform(
@@ -349,7 +373,10 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 
 				for (int32 LocalIdx = 0; LocalIdx < GroupCount; ++LocalIdx)
 				{
-					if (bLocalUsed[LocalIdx]) continue;
+					if (bLocalUsed[LocalIdx])
+					{
+						continue;
+					}
 
 					AActor* MinionActor = Squad->ActiveMinions[ReachableIndices[LocalIdx]];
 					float ScoreDist = FVector::Dist2D(MinionActor->GetActorLocation(), SlotLoc);
@@ -383,12 +410,18 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 		for (int32 LocalIdx = 0; LocalIdx < GroupCount; ++LocalIdx)
 		{
 			const int32 SlotIdx = AssignedSlotForLocalIdx[LocalIdx];
-			if (!SolveResult.Slots.IsValidIndex(SlotIdx)) continue;
+			if (!SolveResult.Slots.IsValidIndex(SlotIdx))
+			{
+				continue;
+			}
 
 			const int32 SquadIdx = ReachableIndices[LocalIdx];
 			AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
 			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
-			if (!MinionActor || !MinionInterface) continue;
+			if (!MinionActor || !MinionInterface)
+			{
+				continue;
+			}
 
 			StickySlotAssignments.Add(MinionActor, SlotIdx);
 			MinionInterface->SetTightCorridorMode(SolveResult.bSuppressLateralEvade);
@@ -433,7 +466,8 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 						Tracker.StuckSeconds += Squad->UpdateInterval;
 
 						if (Tracker.StuckSeconds >= 4.0f &&
-							(!MinionActor->WasRecentlyRendered(0.5f) || FVector::DistSquared2D(MinionLoc, PlayerNavLoc) > FMath::Square(1800.0f)))
+							(!MinionActor->WasRecentlyRendered(0.5f) || FVector::DistSquared2D(MinionLoc, PlayerNavLoc)
+								> FMath::Square(1800.0f)))
 						{
 							MinionInterface->ExecuteUnstuckRecovery(3, CatchUpWarpTarget);
 							Tracker.StuckSeconds = 0.0f;
@@ -441,13 +475,13 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 							Tracker.LastCheckLocation = CatchUpWarpTarget;
 							continue;
 						}
-						else if (Tracker.StuckSeconds >= 2.4f && Tracker.LastTriggeredTier < 2)
+						if (Tracker.StuckSeconds >= 2.4f && Tracker.LastTriggeredTier < 2)
 						{
 							Tracker.LastTriggeredTier = 2;
 							MinionInterface->ExecuteUnstuckRecovery(2, SlotLocation);
 							continue;
 						}
-						else if (Tracker.StuckSeconds >= 1.2f && Tracker.LastTriggeredTier < 1)
+						if (Tracker.StuckSeconds >= 1.2f && Tracker.LastTriggeredTier < 1)
 						{
 							Tracker.LastTriggeredTier = 1;
 							MinionInterface->ExecuteUnstuckRecovery(1, PlayerNavLoc);
@@ -470,10 +504,13 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 			if (Squad->bDebugDrawSlots)
 			{
 				const FColor SlotColor = (SolveResult.ActiveMode == EMinionFormationMode::SingleFileTrail)
-					? FColor::Yellow
-					: ((SolveResult.ActiveMode == EMinionFormationMode::AdaptiveFan) ? FColor::Magenta : FColor::Green);
+					                         ? FColor::Yellow
+					                         : ((SolveResult.ActiveMode == EMinionFormationMode::AdaptiveFan)
+						                            ? FColor::Magenta
+						                            : FColor::Green);
 				DrawDebugSphere(World, SlotLocation, 14.0f, 8, SlotColor, false, Squad->UpdateInterval * 1.1f);
-				DrawDebugLine(World, MinionLoc, SlotLocation, FColor::Cyan, false, Squad->UpdateInterval * 1.1f, 0, 1.5f);
+				DrawDebugLine(World, MinionLoc, SlotLocation, FColor::Cyan, false, Squad->UpdateInterval * 1.1f, 0,
+				              1.5f);
 			}
 
 			if (bForceIssueMoves || DistToSlot > 48.0f)
@@ -489,30 +526,42 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 			const TArray<FVector>& Trail = FormationSolver.GetBreadcrumbs();
 			for (int32 b = 0; b < Trail.Num() - 1; ++b)
 			{
-				DrawDebugLine(World, Trail[b] + FVector(0, 0, 15.0f), Trail[b + 1] + FVector(0, 0, 15.0f), FColor::Purple, false, DebugDuration, 0, 2.5f);
+				DrawDebugLine(World, Trail[b] + FVector(0, 0, 15.0f), Trail[b + 1] + FVector(0, 0, 15.0f),
+				              FColor::Purple, false, DebugDuration, 0, 2.5f);
 			}
 			if (!Trail.IsEmpty())
 			{
-				DrawDebugLine(World, Trail.Last() + FVector(0, 0, 15.0f), PlayerNavLoc + FVector(0, 0, 15.0f), FColor::Purple, false, DebugDuration, 0, 2.5f);
+				DrawDebugLine(World, Trail.Last() + FVector(0, 0, 15.0f), PlayerNavLoc + FVector(0, 0, 15.0f),
+				              FColor::Purple, false, DebugDuration, 0, 2.5f);
 			}
 
-			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f), SolveResult.DebugLeftHit + FVector(0, 0, 25.0f), FColor::Orange, false, DebugDuration, 0, 2.0f);
-			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f), SolveResult.DebugRightHit + FVector(0, 0, 25.0f), FColor::Orange, false, DebugDuration, 0, 2.0f);
-			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f), SolveResult.DebugBackHit + FVector(0, 0, 25.0f), FColor::Red, false, DebugDuration, 0, 2.0f);
+			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f),
+			              SolveResult.DebugLeftHit + FVector(0, 0, 25.0f), FColor::Orange, false, DebugDuration, 0,
+			              2.0f);
+			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f),
+			              SolveResult.DebugRightHit + FVector(0, 0, 25.0f), FColor::Orange, false, DebugDuration, 0,
+			              2.0f);
+			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f),
+			              SolveResult.DebugBackHit + FVector(0, 0, 25.0f), FColor::Red, false, DebugDuration, 0, 2.0f);
 
 			const TCHAR* ModeLabel = TEXT("CRESCENT");
 			switch (SolveResult.ActiveMode)
 			{
-			case EMinionFormationMode::DoubleFile:      ModeLabel = TEXT("DOUBLE-FILE"); break;
-			case EMinionFormationMode::SingleFileTrail: ModeLabel = TEXT("SINGLE-FILE TRAIL"); break;
-			case EMinionFormationMode::AdaptiveFan:     ModeLabel = TEXT("ADAPTIVE FAN"); break;
+			case EMinionFormationMode::DoubleFile: ModeLabel = TEXT("DOUBLE-FILE");
+				break;
+			case EMinionFormationMode::SingleFileTrail: ModeLabel = TEXT("SINGLE-FILE TRAIL");
+				break;
+			case EMinionFormationMode::AdaptiveFan: ModeLabel = TEXT("ADAPTIVE FAN");
+				break;
 			default: break;
 			}
 
 			DrawDebugString(
 				World,
 				PlayerLocation + FVector(0.0f, 0.0f, 125.0f),
-				FString::Printf(TEXT("Mode: %s | Width: %.0fcm | Back: %.0fcm"), ModeLabel, SolveResult.EffectiveCorridorWidth, SolveResult.BackClearance),
+				FString::Printf(
+					TEXT("Mode: %s | Width: %.0fcm | Back: %.0fcm"), ModeLabel, SolveResult.EffectiveCorridorWidth,
+					SolveResult.BackClearance),
 				nullptr,
 				FColor::White,
 				DebugDuration,
@@ -548,7 +597,8 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 			}
 		}
 
-		const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(*NavData, PlayerActor, nullptr);
+		const FSharedConstNavQueryFilter Filter =
+			UNavigationQueryFilter::GetQueryFilter(*NavData, PlayerActor, nullptr);
 		const int32 StrandedCount = StrandedAtTakeoffIndices.Num();
 		const FTransform StrandedTransform(WaitingGroupAnchorTransform.GetRotation(), StrandedAnchorLoc);
 
@@ -557,9 +607,15 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 			const int32 SquadIdx = StrandedAtTakeoffIndices[LocalIdx];
 			AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
 			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
-			if (!MinionActor || !MinionInterface) continue;
+			if (!MinionActor || !MinionInterface)
+			{
+				continue;
+			}
 
-			if (MinionInterface->GetMinionState() == EMinionState::TraversingNavLink) continue;
+			if (MinionInterface->GetMinionState() == EMinionState::TraversingNavLink)
+			{
+				continue;
+			}
 
 			const FVector IdealSlot = CalculateSlotAroundTransform(LocalIdx, StrandedTransform);
 			bool bHitEdge = false;
@@ -584,13 +640,17 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 	{
 		AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
 		IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
-		if (!MinionActor || !MinionInterface) continue;
+		if (!MinionActor || !MinionInterface)
+		{
+			continue;
+		}
 
 		const FVector AnchorPos = MinionInterface->GetInteractableWaitAnchor();
 		if (Squad->bDebugDrawSlots)
 		{
 			DrawDebugSphere(World, AnchorPos, 18.0f, 8, FColor::Orange, false, Squad->UpdateInterval * 1.1f);
-			DrawDebugLine(World, MinionActor->GetActorLocation(), AnchorPos, FColor::Orange, false, Squad->UpdateInterval * 1.1f, 0, 1.5f);
+			DrawDebugLine(World, MinionActor->GetActorLocation(), AnchorPos, FColor::Orange, false,
+			              Squad->UpdateInterval * 1.1f, 0, 1.5f);
 		}
 
 		if (FVector::DistSquared2D(MinionActor->GetActorLocation(), AnchorPos) > FMath::Square(85.0f))
@@ -606,7 +666,10 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 
 void UMinionStance_ChaosWhip::OnEnterStance()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	Squad->SortStanceMinionsForWhipArms();
 	Squad->HitActorTimestamps.Reset();
@@ -646,7 +709,10 @@ void UMinionStance_ChaosWhip::OnExitStance()
 
 void UMinionStance_ChaosWhip::OnSquadRosterChanged()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	if (Squad->PruneInvalidStanceMinions() < Squad->MinReachableMinionsForSpecialStance)
 	{
@@ -663,7 +729,10 @@ void UMinionStance_ChaosWhip::OnSquadRosterChanged()
 
 bool UMinionStance_ChaosWhip::StartBurstSpin()
 {
-	if (!Squad) return false;
+	if (!Squad)
+	{
+		return false;
+	}
 
 	Squad->HitActorTimestamps.Reset();
 
@@ -681,7 +750,10 @@ bool UMinionStance_ChaosWhip::StartBurstSpin()
 
 void UMinionStance_ChaosWhip::SetContinuousSpin(bool bEnable)
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	if (bEnable)
 	{
@@ -705,11 +777,17 @@ void UMinionStance_ChaosWhip::SetContinuousSpin(bool bEnable)
 
 void UMinionStance_ChaosWhip::UpdateWalkIntoWhipFormation(float DeltaTime)
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	AActor* PlayerActor = Squad->GetOwner();
 	UWorld* World = Squad->GetWorld();
-	if (!PlayerActor || !World) return;
+	if (!PlayerActor || !World)
+	{
+		return;
+	}
 
 	Squad->UpdateHandAnchorTransforms(0.0f);
 
@@ -759,7 +837,7 @@ void UMinionStance_ChaosWhip::UpdateWalkIntoWhipFormation(float DeltaTime)
 		{
 			Squad->BroadcastDebug(
 				FString::Printf(TEXT("Whip Walk-In Canceled: Only %d reachable minions remain (Need %d)!"),
-					Squad->StanceMinions.Num(), Squad->MinReachableMinionsForSpecialStance),
+				                Squad->StanceMinions.Num(), Squad->MinReachableMinionsForSpecialStance),
 				FColor::Red,
 				2.5f);
 			Squad->SetSquadStance(EMinionSquadStance::Follow);
@@ -775,7 +853,10 @@ void UMinionStance_ChaosWhip::UpdateWalkIntoWhipFormation(float DeltaTime)
 	{
 		AActor* MinionActor = Squad->StanceMinions[i];
 		IMinionAgentInterface* MinionInterface = Squad->StanceMinionInterfaces[i].GetInterface();
-		if (!MinionActor || !MinionInterface) continue;
+		if (!MinionActor || !MinionInterface)
+		{
+			continue;
+		}
 
 		FVector TargetLinkWorld = Squad->CalculateWhipLinkWorldTarget(i);
 		FNavLocation ProjectedLoc;
@@ -805,7 +886,8 @@ void UMinionStance_ChaosWhip::UpdateWalkIntoWhipFormation(float DeltaTime)
 		if (Squad->bDebugDrawSlots)
 		{
 			DrawDebugSphere(World, TargetLinkWorld, 15.0f, 8, FColor::Yellow, false, -1.0f);
-			DrawDebugLine(World, MinionActor->GetActorLocation(), TargetLinkWorld, FColor::Yellow, false, -1.0f, 0, 2.0f);
+			DrawDebugLine(World, MinionActor->GetActorLocation(), TargetLinkWorld, FColor::Yellow, false, -1.0f, 0,
+			              2.0f);
 		}
 	}
 
@@ -828,7 +910,8 @@ void UMinionStance_ChaosWhip::UpdateWalkIntoWhipFormation(float DeltaTime)
 
 			if (Squad->StanceMinions.Num() < Squad->MinReachableMinionsForSpecialStance)
 			{
-				Squad->BroadcastDebug(TEXT("Whip Walk-In Timed Out before 4 minions arrived: Returning to Follow."), FColor::Red, 2.5f);
+				Squad->BroadcastDebug(
+					TEXT("Whip Walk-In Timed Out before 4 minions arrived: Returning to Follow."), FColor::Red, 2.5f);
 				Squad->SetSquadStance(EMinionSquadStance::Follow);
 				return;
 			}
@@ -855,7 +938,10 @@ void UMinionStance_ChaosWhip::UpdateWalkIntoWhipFormation(float DeltaTime)
 
 void UMinionStance_ChaosWhip::BindPooledChaosChains()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	ReleasePooledChaosChains();
 
@@ -877,7 +963,10 @@ void UMinionStance_ChaosWhip::BindPooledChaosChains()
 	{
 		AActor* MinionActor = Squad->StanceMinions[i];
 		IMinionAgentInterface* MinionInterface = Squad->StanceMinionInterfaces[i].GetInterface();
-		if (!MinionActor || !MinionInterface) continue;
+		if (!MinionActor || !MinionInterface)
+		{
+			continue;
+		}
 
 		const int32 ArmIndex = Cfg.bDualArmWhip ? (i % 2) : 0;
 		USphereComponent* HandSphere = Squad->HandAnchorSpheres[ArmIndex];
@@ -905,8 +994,13 @@ void UMinionStance_ChaosWhip::BindPooledChaosChains()
 		}
 
 		AActor* ChildMinion = Squad->StanceMinions[i];
-		UPrimitiveComponent* ChildPrim = ChildMinion ? Cast<UPrimitiveComponent>(ChildMinion->GetRootComponent()) : nullptr;
-		if (!ChildPrim) continue;
+		UPrimitiveComponent* ChildPrim = ChildMinion
+			                                 ? Cast<UPrimitiveComponent>(ChildMinion->GetRootComponent())
+			                                 : nullptr;
+		if (!ChildPrim)
+		{
+			continue;
+		}
 
 		const int32 ArmIndex = Cfg.bDualArmWhip ? (i % 2) : 0;
 		const int32 LinkIndexInArm = Cfg.bDualArmWhip ? (i / 2) : i;
@@ -926,23 +1020,26 @@ void UMinionStance_ChaosWhip::BindPooledChaosChains()
 			TargetLinkDistance = Cfg.LinkSpacing;
 		}
 
-		if (!ParentPrim) continue;
+		if (!ParentPrim)
+		{
+			continue;
+		}
 
 		UPhysicsConstraintComponent* Constraint = Squad->ConstraintPool[i];
 		Constraint->AttachToComponent(ParentPrim, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 		Constraint->SetDisableCollision(true);
 
-		Constraint->SetLinearXLimit(ELinearConstraintMotion::LCM_Limited, Cfg.LinearConstraintSlack);
-		Constraint->SetLinearYLimit(ELinearConstraintMotion::LCM_Limited, Cfg.LinearConstraintSlack);
-		Constraint->SetLinearZLimit(ELinearConstraintMotion::LCM_Limited, Cfg.MaxVerticalSlack);
+		Constraint->SetLinearXLimit(LCM_Limited, Cfg.LinearConstraintSlack);
+		Constraint->SetLinearYLimit(LCM_Limited, Cfg.LinearConstraintSlack);
+		Constraint->SetLinearZLimit(LCM_Limited, Cfg.MaxVerticalSlack);
 
 		Constraint->ConstraintInstance.ProfileInstance.LinearLimit.bSoftConstraint = true;
 		Constraint->ConstraintInstance.ProfileInstance.LinearLimit.Stiffness = Cfg.LinearSpringStiffness;
 		Constraint->ConstraintInstance.ProfileInstance.LinearLimit.Damping = Cfg.LinearSpringDamping;
 
-		Constraint->SetAngularSwing1Limit(EAngularConstraintMotion::ACM_Limited, Cfg.MaxJointBendAngleDegrees);
-		Constraint->SetAngularSwing2Limit(EAngularConstraintMotion::ACM_Limited, 10.0f);
-		Constraint->SetAngularTwistLimit(EAngularConstraintMotion::ACM_Locked, 0.0f);
+		Constraint->SetAngularSwing1Limit(ACM_Limited, Cfg.MaxJointBendAngleDegrees);
+		Constraint->SetAngularSwing2Limit(ACM_Limited, 10.0f);
+		Constraint->SetAngularTwistLimit(ACM_Locked, 0.0f);
 
 		Constraint->ConstraintInstance.ProfileInstance.ConeLimit.bSoftConstraint = true;
 		Constraint->ConstraintInstance.ProfileInstance.ConeLimit.Stiffness = Cfg.AngularBendStiffness;
@@ -952,8 +1049,10 @@ void UMinionStance_ChaosWhip::BindPooledChaosChains()
 
 		Constraint->SetConstraintReferencePosition(EConstraintFrame::Frame1, FVector(TargetLinkDistance, 0.0f, 0.0f));
 		Constraint->SetConstraintReferencePosition(EConstraintFrame::Frame2, FVector::ZeroVector);
-		Constraint->SetConstraintReferenceOrientation(EConstraintFrame::Frame1, FVector::ForwardVector, FVector::RightVector);
-		Constraint->SetConstraintReferenceOrientation(EConstraintFrame::Frame2, FVector::ForwardVector, FVector::RightVector);
+		Constraint->SetConstraintReferenceOrientation(EConstraintFrame::Frame1, FVector::ForwardVector,
+		                                              FVector::RightVector);
+		Constraint->SetConstraintReferenceOrientation(EConstraintFrame::Frame2, FVector::ForwardVector,
+		                                              FVector::RightVector);
 
 		Constraint->SetLinearPositionDrive(true, true, true);
 		Constraint->SetLinearVelocityDrive(true, true, true);
@@ -977,7 +1076,10 @@ void UMinionStance_ChaosWhip::BindPooledChaosChains()
 
 void UMinionStance_ChaosWhip::ReleasePooledChaosChains()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	for (UPhysicsConstraintComponent* Constraint : Squad->ConstraintPool)
 	{
@@ -986,7 +1088,8 @@ void UMinionStance_ChaosWhip::ReleasePooledChaosChains()
 			Constraint->BreakConstraint();
 			if (AActor* OwnerActor = Squad->GetOwner())
 			{
-				Constraint->AttachToComponent(OwnerActor->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+				Constraint->AttachToComponent(OwnerActor->GetRootComponent(),
+				                              FAttachmentTransformRules::KeepRelativeTransform);
 			}
 		}
 	}
@@ -1004,7 +1107,10 @@ void UMinionStance_ChaosWhip::ReleasePooledChaosChains()
 
 void UMinionStance_ChaosWhip::TickStance(float DeltaTime)
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	if (bIsWalkingIntoWhip)
 	{
@@ -1117,8 +1223,8 @@ void UMinionStance_ChaosWhip::TickStance(float DeltaTime)
 		if (Squad->bDebugDrawSlots)
 		{
 			const FColor ArmColor = bAnySpinActive
-				? ((ArmIndex == 0) ? FColor::Magenta : FColor::Purple)
-				: ((ArmIndex == 0) ? FColor::Orange : FColor::Cyan);
+				                        ? ((ArmIndex == 0) ? FColor::Magenta : FColor::Purple)
+				                        : ((ArmIndex == 0) ? FColor::Orange : FColor::Cyan);
 
 			DrawDebugLine(World, PrevDebugPos[ArmIndex], CurrentLoc, ArmColor, false, -1.0f, 0, 3.5f);
 			DrawDebugSphere(World, CurrentLoc, Cfg.HitSphereRadius * 0.45f, 8, ArmColor, false, -1.0f);
@@ -1135,10 +1241,16 @@ void UMinionStance_ChaosWhip::TickStance(float DeltaTime)
 
 void UMinionStance_CarryRush::OnEnterStance()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	AActor* OwnerActor = Squad->GetOwner();
-	if (!OwnerActor) return;
+	if (!OwnerActor)
+	{
+		return;
+	}
 
 	CarryRushDirection = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
 	if (CarryRushDirection.IsNearlyZero())
@@ -1181,7 +1293,9 @@ void UMinionStance_CarryRush::OnEnterStance()
 		{
 			OwnerRoot->IgnoreActorWhenMoving(MinionActor, true);
 		}
-		if (UPrimitiveComponent* MinionRoot = MinionActor ? Cast<UPrimitiveComponent>(MinionActor->GetRootComponent()) : nullptr)
+		if (UPrimitiveComponent* MinionRoot = MinionActor
+			                                      ? Cast<UPrimitiveComponent>(MinionActor->GetRootComponent())
+			                                      : nullptr)
 		{
 			MinionRoot->IgnoreActorWhenMoving(OwnerActor, true);
 		}
@@ -1232,7 +1346,10 @@ void UMinionStance_CarryRush::RestorePlayerAirBraking()
 
 void UMinionStance_CarryRush::OnExitStance()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	AActor* OwnerActor = Squad->GetOwner();
 	UPrimitiveComponent* OwnerRoot = OwnerActor ? Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent()) : nullptr;
@@ -1314,7 +1431,8 @@ void UMinionStance_CarryRush::ReleaseCarriedJumpMinion()
 	{
 		if (AActor* PlayerActor = Squad->GetOwner())
 		{
-			FVector SafeLandingPos = PlayerActor->GetActorLocation() - (PlayerActor->GetActorForwardVector().GetSafeNormal2D() * 65.0f);
+			FVector SafeLandingPos = PlayerActor->GetActorLocation() - (PlayerActor->GetActorForwardVector().
+				GetSafeNormal2D() * 65.0f);
 			if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(Squad->GetWorld()))
 			{
 				FNavLocation ProjectedNav;
@@ -1347,7 +1465,10 @@ void UMinionStance_CarryRush::ReleaseCarriedJumpMinion()
 
 void UMinionStance_CarryRush::OnSquadRosterChanged()
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	if (Squad->PruneInvalidStanceMinions() < Squad->MinReachableMinionsForSpecialStance)
 	{
@@ -1357,10 +1478,16 @@ void UMinionStance_CarryRush::OnSquadRosterChanged()
 
 bool UMinionStance_CarryRush::StartRushCharge()
 {
-	if (!Squad) return false;
+	if (!Squad)
+	{
+		return false;
+	}
 
 	AActor* OwnerActor = Squad->GetOwner();
-	if (!OwnerActor) return false;
+	if (!OwnerActor)
+	{
+		return false;
+	}
 
 	CarryRushDirection = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
 	if (CarryRushDirection.IsNearlyZero())
@@ -1406,10 +1533,16 @@ void UMinionStance_CarryRush::StopRushCharge(bool bExitCarryStance)
 
 bool UMinionStance_CarryRush::TriggerMomentumJump()
 {
-	if (!Squad || bIsCarryJumping) return false;
+	if (!Squad || bIsCarryJumping)
+	{
+		return false;
+	}
 
 	ACharacter* PlayerChar = Cast<ACharacter>(Squad->GetOwner());
-	if (!PlayerChar) return false;
+	if (!PlayerChar)
+	{
+		return false;
+	}
 
 	UCharacterMovementComponent* MoveComp = PlayerChar->GetCharacterMovement();
 	const FMinionCarryRushConfig& Cfg = Squad->CarryRushConfig;
@@ -1473,7 +1606,8 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 			}
 
 			USkeletalMeshComponent* PlayerMesh = PlayerChar->GetMesh();
-			if (!Cfg.CarriedMinionAttachSocket.IsNone() && PlayerMesh && PlayerMesh->DoesSocketExist(Cfg.CarriedMinionAttachSocket))
+			if (!Cfg.CarriedMinionAttachSocket.IsNone() && PlayerMesh && PlayerMesh->DoesSocketExist(
+				Cfg.CarriedMinionAttachSocket))
 			{
 				JumpCarriedMinion->AttachToComponent(
 					PlayerMesh,
@@ -1504,7 +1638,7 @@ bool UMinionStance_CarryRush::TriggerMomentumJump()
 	Squad->OnCarryJumpTriggered.Broadcast(LaunchVelocity, HorizontalSpeed);
 	Squad->BroadcastDebug(
 		FString::Printf(TEXT("Jump Propelled! Carrying %s while %d minions wait behind."),
-			*GetNameSafe(JumpCarriedMinion), FMath::Max(0, Squad->StanceMinions.Num() - 1)),
+		                *GetNameSafe(JumpCarriedMinion), FMath::Max(0, Squad->StanceMinions.Num() - 1)),
 		FColor::Yellow,
 		2.5f);
 
@@ -1527,8 +1661,14 @@ void UMinionStance_CarryRush::HandlePlayerLanded(const FHitResult& Hit)
 
 void UMinionStance_CarryRush::HandlePlayerWallHit(AActor* OtherActor, const FHitResult& Hit)
 {
-	if (!bIsRushCharging || !Squad || !OtherActor) return;
-	if (OtherActor->IsA<APawn>()) return;
+	if (!bIsRushCharging || !Squad || !OtherActor)
+	{
+		return;
+	}
+	if (OtherActor->IsA<APawn>())
+	{
+		return;
+	}
 
 	const FMinionCarryRushConfig& Cfg = Squad->CarryRushConfig;
 
@@ -1551,7 +1691,8 @@ void UMinionStance_CarryRush::HandlePlayerWallHit(AActor* OtherActor, const FHit
 			{
 				if (Cfg.WallBounceBackStrength > 0.0f)
 				{
-					const FVector BounceVel = (Hit.ImpactNormal.GetSafeNormal2D() * Cfg.WallBounceBackStrength) + FVector(0.0f, 0.0f, 260.0f);
+					const FVector BounceVel = (Hit.ImpactNormal.GetSafeNormal2D() * Cfg.WallBounceBackStrength) +
+						FVector(0.0f, 0.0f, 260.0f);
 					PlayerChar->LaunchCharacter(BounceVel, true, true);
 				}
 			}
@@ -1601,11 +1742,17 @@ FVector UMinionStance_CarryRush::CalculatePalanquinSlotLocation(
 
 void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepStart, const FVector& SweepEnd)
 {
-	if (!Squad || !bIsRushCharging) return;
+	if (!Squad || !bIsRushCharging)
+	{
+		return;
+	}
 
 	UWorld* World = Squad->GetWorld();
 	AActor* PlayerActor = Squad->GetOwner();
-	if (!World || !PlayerActor) return;
+	if (!World || !PlayerActor)
+	{
+		return;
+	}
 
 	const FMinionCarryRushConfig& Cfg = Squad->CarryRushConfig;
 
@@ -1631,7 +1778,10 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 		FCollisionShape::MakeSphere(Cfg.RamHitboxRadius),
 		QueryParams);
 
-	if (HitResults.IsEmpty()) return;
+	if (HitResults.IsEmpty())
+	{
+		return;
+	}
 
 	UPrimitiveComponent* PlayerRoot = Cast<UPrimitiveComponent>(PlayerActor->GetRootComponent());
 	const double CurrentTime = World->GetTimeSeconds();
@@ -1653,7 +1803,10 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 
 		if (const double* LastHit = Squad->HitActorTimestamps.Find(HitActor))
 		{
-			if ((CurrentTime - *LastHit) < 0.4) continue;
+			if ((CurrentTime - *LastHit) < 0.4)
+			{
+				continue;
+			}
 		}
 
 		// Build unified combat payload (mirrors PerformWhipHitSweep)
@@ -1665,11 +1818,11 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 		}
 
 		const float KnockHoriz = (FeedbackCfg.KnockbackHorizontalStrength > KINDA_SMALL_NUMBER)
-			? FeedbackCfg.KnockbackHorizontalStrength
-			: Cfg.EnemyKnockbackStrength;
+			                         ? FeedbackCfg.KnockbackHorizontalStrength
+			                         : Cfg.EnemyKnockbackStrength;
 		const float KnockVert = (FeedbackCfg.KnockbackVerticalStrength > KINDA_SMALL_NUMBER)
-			? FeedbackCfg.KnockbackVerticalStrength
-			: 380.0f;
+			                        ? FeedbackCfg.KnockbackVerticalStrength
+			                        : 380.0f;
 
 		FCombatHitPayload Payload;
 		Payload.InstigatorActor = PlayerActor;
@@ -1736,8 +1889,8 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 			Payload.MaxHearts = HitResponse.MaxHearts;
 			Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
 			Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
-				? FeedbackCfg.KillHitStopDuration
-				: FeedbackCfg.HitStopDuration;
+				                                 ? FeedbackCfg.KillHitStopDuration
+				                                 : FeedbackCfg.HitStopDuration;
 
 			if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
 			{
@@ -1755,8 +1908,8 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 			APawn* InstigatorPawn = Cast<APawn>(PlayerActor);
 			AController* InstigatorController = InstigatorPawn ? InstigatorPawn->GetController() : nullptr;
 			TSubclassOf<UDamageType> DmgType = Squad->WhipConfig.DamageTypeClass
-				? Squad->WhipConfig.DamageTypeClass
-				: TSubclassOf<UDamageType>(UDamageType::StaticClass());
+				                                   ? Squad->WhipConfig.DamageTypeClass
+				                                   : TSubclassOf<UDamageType>(UDamageType::StaticClass());
 
 			UGameplayStatics::ApplyPointDamage(
 				HitActor,
@@ -1774,7 +1927,10 @@ void UMinionStance_CarryRush::PerformFrontEnemyBumperSweep(const FVector& SweepS
 
 void UMinionStance_CarryRush::TickStance(float DeltaTime)
 {
-	if (!Squad) return;
+	if (!Squad)
+	{
+		return;
+	}
 
 	AActor* PlayerActor = Squad->GetOwner();
 	UWorld* World = Squad->GetWorld();
@@ -1811,11 +1967,12 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 		if (USkeletalMeshComponent* MeshComp = PlayerChar->GetMesh())
 		{
 			const float GatherAlpha = (Cfg.GatherDuration > SMALL_NUMBER)
-				? FMath::Clamp(CarryStanceElapsedTime / Cfg.GatherDuration, 0.0f, 1.0f)
-				: 1.0f;
+				                          ? FMath::Clamp(CarryStanceElapsedTime / Cfg.GatherDuration, 0.0f, 1.0f)
+				                          : 1.0f;
 
 			FVector RelLoc = MeshComp->GetRelativeLocation();
-			RelLoc.Z = FMath::Lerp(CachedPlayerMeshBaseZ, CachedPlayerMeshBaseZ + Cfg.PlayerMeshLiftOffsetZ, GatherAlpha);
+			RelLoc.Z = FMath::Lerp(CachedPlayerMeshBaseZ, CachedPlayerMeshBaseZ + Cfg.PlayerMeshLiftOffsetZ,
+			                       GatherAlpha);
 			MeshComp->SetRelativeLocation(RelLoc);
 		}
 	}
@@ -1863,11 +2020,17 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 				FCollisionQueryParams WallParams(SCENE_QUERY_STAT(CarryRushWallTrace), false, PlayerActor);
 				for (AActor* SquadMinion : Squad->ActiveMinions)
 				{
-					if (IsValid(SquadMinion)) WallParams.AddIgnoredActor(SquadMinion);
+					if (IsValid(SquadMinion))
+					{
+						WallParams.AddIgnoredActor(SquadMinion);
+					}
 				}
 				for (const TWeakObjectPtr<AActor>& IgnoredEnemy : RushIgnoredEnemies)
 				{
-					if (IgnoredEnemy.IsValid()) WallParams.AddIgnoredActor(IgnoredEnemy.Get());
+					if (IgnoredEnemy.IsValid())
+					{
+						WallParams.AddIgnoredActor(IgnoredEnemy.Get());
+					}
 				}
 
 				FHitResult WallHit;
@@ -1901,8 +2064,10 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 	const FVector PlayerVel2D(PlayerActor->GetVelocity().X, PlayerActor->GetVelocity().Y, 0.0f);
 
 	FVector PalanquinForward = bIsRushCharging
-		? CarryRushDirection
-		: ((PlayerVel2D.SizeSquared() > 400.0f) ? PlayerVel2D.GetSafeNormal() : PlayerActor->GetActorForwardVector().GetSafeNormal2D());
+		                           ? CarryRushDirection
+		                           : ((PlayerVel2D.SizeSquared() > 400.0f)
+			                              ? PlayerVel2D.GetSafeNormal()
+			                              : PlayerActor->GetActorForwardVector().GetSafeNormal2D());
 
 	if (PalanquinForward.IsNearlyZero())
 	{
@@ -1916,14 +2081,17 @@ void UMinionStance_CarryRush::TickStance(float DeltaTime)
 	for (int32 i = 0; i < MinionCount; ++i)
 	{
 		AActor* MinionActor = Squad->StanceMinions[i];
-		const FVector TargetCarrySlot = CalculatePalanquinSlotLocation(i, MinionCount, UpdatedPlayerLoc, PalanquinForward, PalanquinRight);
-		const FVector NewMinionLoc = FMath::VInterpTo(MinionActor->GetActorLocation(), TargetCarrySlot, DeltaTime, SlotInterpSpeed);
+		const FVector TargetCarrySlot = CalculatePalanquinSlotLocation(i, MinionCount, UpdatedPlayerLoc,
+		                                                               PalanquinForward, PalanquinRight);
+		const FVector NewMinionLoc = FMath::VInterpTo(MinionActor->GetActorLocation(), TargetCarrySlot, DeltaTime,
+		                                              SlotInterpSpeed);
 
 		MinionActor->SetActorLocationAndRotation(NewMinionLoc, MinionTargetRot, false);
 
 		if (Squad->bDebugDrawSlots)
 		{
-			DrawDebugSphere(World, TargetCarrySlot, 16.0f, 8, bIsRushCharging ? FColor::Magenta : FColor::Cyan, false, -1.0f);
+			DrawDebugSphere(World, TargetCarrySlot, 16.0f, 8, bIsRushCharging ? FColor::Magenta : FColor::Cyan, false,
+			                -1.0f);
 		}
 	}
 }
@@ -1947,7 +2115,10 @@ void UMinionSquadComponent::BeginPlay()
 	SetComponentTickEnabled(false);
 
 	AActor* OwnerActor = GetOwner();
-	if (!OwnerActor) return;
+	if (!OwnerActor)
+	{
+		return;
+	}
 
 	if (GetRelativeLocation().SizeSquared2D() < FMath::Square(PlayerEvadeRadius + 20.0f))
 	{
@@ -2054,7 +2225,8 @@ void UMinionSquadComponent::BroadcastDebug(const FString& Message, FColor Screen
 
 	if (bPrintDebugToScreen && GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, Duration, ScreenColor, FString::Printf(TEXT("[PikminSquad] %s"), *Message));
+		GEngine->AddOnScreenDebugMessage(-1, Duration, ScreenColor,
+		                                 FString::Printf(TEXT("[PikminSquad] %s"), *Message));
 	}
 	UE_LOG(LogTemp, Log, TEXT("[PikminSquad] %s"), *Message);
 }
@@ -2063,7 +2235,8 @@ int32 UMinionSquadComponent::PruneInvalidMinions()
 {
 	for (int32 i = ActiveMinions.Num() - 1; i >= 0; --i)
 	{
-		if (!IsValid(ActiveMinions[i]) || !ActiveMinionInterfaces.IsValidIndex(i) || !ActiveMinionInterfaces[i].GetInterface())
+		if (!IsValid(ActiveMinions[i]) || !ActiveMinionInterfaces.IsValidIndex(i) || !ActiveMinionInterfaces[i].
+			GetInterface())
 		{
 			ActiveMinions.RemoveAtSwap(i);
 			if (ActiveMinionInterfaces.IsValidIndex(i))
@@ -2079,7 +2252,8 @@ int32 UMinionSquadComponent::PruneInvalidStanceMinions()
 {
 	for (int32 i = StanceMinions.Num() - 1; i >= 0; --i)
 	{
-		if (!IsValid(StanceMinions[i]) || !StanceMinionInterfaces.IsValidIndex(i) || !StanceMinionInterfaces[i].GetInterface())
+		if (!IsValid(StanceMinions[i]) || !StanceMinionInterfaces.IsValidIndex(i) || !StanceMinionInterfaces[i].
+			GetInterface())
 		{
 			StanceMinions.RemoveAtSwap(i);
 			if (StanceMinionInterfaces.IsValidIndex(i))
@@ -2098,7 +2272,10 @@ int32 UMinionSquadComponent::PruneInvalidStanceMinions()
 bool UMinionSquadComponent::IsPlayerGroundedOnNavMesh(UNavigationSystemV1* NavSys, FVector& OutPlayerNavLoc) const
 {
 	const AActor* PlayerActor = GetOwner();
-	if (!NavSys || !PlayerActor) return false;
+	if (!NavSys || !PlayerActor)
+	{
+		return false;
+	}
 
 	// 1. Reject if the player is currently jumping/falling in mid-air
 	if (const ACharacter* PlayerChar = Cast<ACharacter>(PlayerActor))
@@ -2113,12 +2290,16 @@ bool UMinionSquadComponent::IsPlayerGroundedOnNavMesh(UNavigationSystemV1* NavSy
 	}
 
 	ANavigationData* NavData = NavSys->GetDefaultNavDataInstance();
-	if (!NavData) return false;
+	if (!NavData)
+	{
+		return false;
+	}
 
 	// 2. Reject if the player's feet are not standing on a valid NavMesh surface
 	FNavLocation ProjectedPlayerNav;
 	const FVector PlayerFeetExtent(75.0f, 75.0f, 125.0f);
-	if (!NavSys->ProjectPointToNavigation(PlayerActor->GetActorLocation(), ProjectedPlayerNav, PlayerFeetExtent, NavData))
+	if (!NavSys->ProjectPointToNavigation(PlayerActor->GetActorLocation(), ProjectedPlayerNav, PlayerFeetExtent,
+	                                      NavData))
 	{
 		return false;
 	}
@@ -2163,7 +2344,8 @@ bool UMinionSquadComponent::CanMinionReachNavLocation(
 		return false;
 	}
 
-	const FSharedConstNavQueryFilter QueryFilter = UNavigationQueryFilter::GetQueryFilter(*NavData, MinionActor, nullptr);
+	const FSharedConstNavQueryFilter QueryFilter = UNavigationQueryFilter::GetQueryFilter(
+		*NavData, MinionActor, nullptr);
 
 	// Fast-path: unobstructed straight-line NavMesh raycast guarantees same-island reachability—skip A* completely!
 	FVector RayHitLoc;
@@ -2187,7 +2369,10 @@ int32 UMinionSquadComponent::GatherReachableMinionsForStance(
 	OutReachableInterfaces.Empty();
 
 	UWorld* World = GetWorld();
-	if (!World) return 0;
+	if (!World)
+	{
+		return 0;
+	}
 
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 	FVector PlayerNavLoc = FVector::ZeroVector;
@@ -2200,7 +2385,8 @@ int32 UMinionSquadComponent::GatherReachableMinionsForStance(
 	for (int32 i = 0; i < ActiveMinions.Num(); ++i)
 	{
 		AActor* MinionActor = ActiveMinions[i];
-		if (!IsValid(MinionActor) || !ActiveMinionInterfaces.IsValidIndex(i) || !ActiveMinionInterfaces[i].GetInterface())
+		if (!IsValid(MinionActor) || !ActiveMinionInterfaces.IsValidIndex(i) || !ActiveMinionInterfaces[i].
+			GetInterface())
 		{
 			continue;
 		}
@@ -2244,7 +2430,7 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 		{
 			BroadcastDebug(
 				FString::Printf(TEXT("Cannot shift stance: Only %d/%d minions can reach player (Need at least %d)!"),
-					ReachableCount, ActiveMinions.Num(), MinReachableMinionsForSpecialStance),
+				                ReachableCount, ActiveMinions.Num(), MinReachableMinionsForSpecialStance),
 				FColor::Red,
 				2.5f);
 			return false;
@@ -2286,8 +2472,8 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 		}
 
 		ActiveStanceObject = (CurrentStance == EMinionSquadStance::AttackWhip)
-			? Cast<UMinionStanceBase>(WhipStanceInstance)
-			: Cast<UMinionStanceBase>(CarryRushStanceInstance);
+			                     ? Cast<UMinionStanceBase>(WhipStanceInstance)
+			                     : Cast<UMinionStanceBase>(CarryRushStanceInstance);
 	}
 
 	if (ActiveStanceObject)
@@ -2303,20 +2489,21 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 EMinionSquadStance UMinionSquadComponent::ToggleSquadStance()
 {
 	SetSquadStance(CurrentStance == EMinionSquadStance::Follow
-		? EMinionSquadStance::AttackWhip
-		: EMinionSquadStance::Follow);
+		               ? EMinionSquadStance::AttackWhip
+		               : EMinionSquadStance::Follow);
 	return CurrentStance;
 }
 
 EMinionSquadStance UMinionSquadComponent::ToggleCarryStance()
 {
 	SetSquadStance(CurrentStance == EMinionSquadStance::CarryRush
-		? EMinionSquadStance::Follow
-		: EMinionSquadStance::CarryRush);
+		               ? EMinionSquadStance::Follow
+		               : EMinionSquadStance::CarryRush);
 	return CurrentStance;
 }
 
-void UMinionSquadComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UMinionSquadComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                          FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
@@ -2332,11 +2519,17 @@ void UMinionSquadComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 
 bool UMinionSquadComponent::StartWhipSpinAttack(bool bAutoEnterAttackStance)
 {
-	if (PruneInvalidMinions() == 0) return false;
+	if (PruneInvalidMinions() == 0)
+	{
+		return false;
+	}
 
 	if (CurrentStance != EMinionSquadStance::AttackWhip)
 	{
-		if (!bAutoEnterAttackStance) return false;
+		if (!bAutoEnterAttackStance)
+		{
+			return false;
+		}
 		if (!SetSquadStance(EMinionSquadStance::AttackWhip))
 		{
 			return false;
@@ -2350,11 +2543,17 @@ void UMinionSquadComponent::SetContinuousTornadoSpin(bool bEnableContinuousSpin,
 {
 	if (bEnableContinuousSpin)
 	{
-		if (PruneInvalidMinions() == 0) return;
+		if (PruneInvalidMinions() == 0)
+		{
+			return;
+		}
 
 		if (CurrentStance != EMinionSquadStance::AttackWhip)
 		{
-			if (!bAutoEnterAttackStance) return;
+			if (!bAutoEnterAttackStance)
+			{
+				return;
+			}
 			if (!SetSquadStance(EMinionSquadStance::AttackWhip))
 			{
 				return;
@@ -2371,24 +2570,30 @@ void UMinionSquadComponent::SetContinuousTornadoSpin(bool bEnableContinuousSpin,
 bool UMinionSquadComponent::IsWhipSpinAttacking() const
 {
 	return (CurrentStance == EMinionSquadStance::AttackWhip && WhipStanceInstance)
-		? WhipStanceInstance->IsSpinning()
-		: false;
+		       ? WhipStanceInstance->IsSpinning()
+		       : false;
 }
 
 bool UMinionSquadComponent::IsWalkingIntoWhipFormation() const
 {
 	return (CurrentStance == EMinionSquadStance::AttackWhip && WhipStanceInstance)
-		? WhipStanceInstance->IsWalkingIntoFormation()
-		: false;
+		       ? WhipStanceInstance->IsWalkingIntoFormation()
+		       : false;
 }
 
 bool UMinionSquadComponent::StartCarryRushCharge(bool bAutoEnterCarryStance)
 {
-	if (PruneInvalidMinions() == 0) return false;
+	if (PruneInvalidMinions() == 0)
+	{
+		return false;
+	}
 
 	if (CurrentStance != EMinionSquadStance::CarryRush)
 	{
-		if (!bAutoEnterCarryStance) return false;
+		if (!bAutoEnterCarryStance)
+		{
+			return false;
+		}
 		if (!SetSquadStance(EMinionSquadStance::CarryRush))
 		{
 			return false;
@@ -2421,8 +2626,8 @@ void UMinionSquadComponent::SetCarryRushChargeActive(bool bActive, bool bAutoEnt
 bool UMinionSquadComponent::TriggerCarryJump()
 {
 	return (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
-		? CarryRushStanceInstance->TriggerMomentumJump()
-		: false;
+		       ? CarryRushStanceInstance->TriggerMomentumJump()
+		       : false;
 }
 
 bool UMinionSquadComponent::StartCarryRushSpell()
@@ -2438,22 +2643,22 @@ void UMinionSquadComponent::StopCarryRushSpell()
 bool UMinionSquadComponent::IsCarryRushCharging() const
 {
 	return (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
-		? CarryRushStanceInstance->IsRushCharging()
-		: false;
+		       ? CarryRushStanceInstance->IsRushCharging()
+		       : false;
 }
 
 bool UMinionSquadComponent::IsCarryJumping() const
 {
 	return (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
-		? CarryRushStanceInstance->IsCarryJumping()
-		: false;
+		       ? CarryRushStanceInstance->IsCarryJumping()
+		       : false;
 }
 
 float UMinionSquadComponent::GetCurrentCarryRushSpeed() const
 {
 	return (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
-		? CarryRushStanceInstance->GetCurrentRushSpeed()
-		: 0.0f;
+		       ? CarryRushStanceInstance->GetCurrentRushSpeed()
+		       : 0.0f;
 }
 
 void UMinionSquadComponent::OnPlayerCarryJumpLanded(const FHitResult& Hit)
@@ -2464,7 +2669,8 @@ void UMinionSquadComponent::OnPlayerCarryJumpLanded(const FHitResult& Hit)
 	}
 }
 
-void UMinionSquadComponent::OnPlayerRushActorHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit)
+void UMinionSquadComponent::OnPlayerRushActorHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse,
+                                                 const FHitResult& Hit)
 {
 	if (CurrentStance == EMinionSquadStance::CarryRush && CarryRushStanceInstance)
 	{
@@ -2480,7 +2686,10 @@ void UMinionSquadComponent::AutoRegisterMinionsInWorld()
 {
 	UWorld* World = GetWorld();
 	AActor* OwnerActor = GetOwner();
-	if (!World || !OwnerActor) return;
+	if (!World || !OwnerActor)
+	{
+		return;
+	}
 
 	TArray<AActor*> FoundMinions;
 	UGameplayStatics::GetAllActorsWithInterface(World, UMinionAgentInterface::StaticClass(), FoundMinions);
@@ -2488,22 +2697,32 @@ void UMinionSquadComponent::AutoRegisterMinionsInWorld()
 	const FVector PlayerLoc = OwnerActor->GetActorLocation();
 	FoundMinions.Sort([&PlayerLoc](const AActor& A, const AActor& B)
 	{
-		return FVector::DistSquared(A.GetActorLocation(), PlayerLoc) < FVector::DistSquared(B.GetActorLocation(), PlayerLoc);
+		return FVector::DistSquared(A.GetActorLocation(), PlayerLoc) < FVector::DistSquared(
+			B.GetActorLocation(), PlayerLoc);
 	});
 
 	for (AActor* Minion : FoundMinions)
 	{
-		if (ActiveMinions.Num() >= MaxMinions) break;
+		if (ActiveMinions.Num() >= MaxMinions)
+		{
+			break;
+		}
 		RegisterMinion(Minion);
 	}
 }
 
 bool UMinionSquadComponent::RegisterMinion(AActor* MinionActor)
 {
-	if (!IsValid(MinionActor)) return false;
+	if (!IsValid(MinionActor))
+	{
+		return false;
+	}
 
 	IMinionAgentInterface* InterfacePtr = Cast<IMinionAgentInterface>(MinionActor);
-	if (!InterfacePtr) return false;
+	if (!InterfacePtr)
+	{
+		return false;
+	}
 
 	if (ActiveMinions.Num() >= MaxMinions || ActiveMinions.Contains(MinionActor))
 	{
@@ -2522,7 +2741,8 @@ bool UMinionSquadComponent::RegisterMinion(AActor* MinionActor)
 	{
 		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 		FVector PlayerNavLoc = FVector::ZeroVector;
-		if (IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc) && CanMinionReachNavLocation(MinionActor, NavSys, PlayerNavLoc))
+		if (IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc) && CanMinionReachNavLocation(
+			MinionActor, NavSys, PlayerNavLoc))
 		{
 			StanceMinions.Add(MinionActor);
 			StanceMinionInterfaces.Add(ScriptInterface);
@@ -2638,7 +2858,7 @@ AActor* UMinionSquadComponent::FindBestThrowableMinion(const FVector& ReferenceO
 	FVector PlayerNavLoc = FVector::ZeroVector;
 	const bool bPlayerGrounded = IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc);
 	const float MaxGrabDistSq = FMath::Square(MaxGrabDistance);
-	const float CloseGrabBypassSq = FMath::Square(350.0f);
+	constexpr float CloseGrabBypassSq = FMath::Square(350.0f);
 
 	AActor* BestMinion = nullptr;
 	float BestDistSq = MAX_flt;
@@ -2663,7 +2883,8 @@ AActor* UMinionSquadComponent::FindBestThrowableMinion(const FVector& ReferenceO
 			continue;
 		}
 
-		if (bPlayerGrounded && DistSq > CloseGrabBypassSq && !CanMinionReachNavLocation(Candidate, NavSys, PlayerNavLoc))
+		if (bPlayerGrounded && DistSq > CloseGrabBypassSq && !
+			CanMinionReachNavLocation(Candidate, NavSys, PlayerNavLoc))
 		{
 			continue;
 		}
@@ -2701,7 +2922,9 @@ int32 UMinionSquadComponent::RecallThrownMinions(bool bOnlyDetachIfReachable)
 		UMinionThrowTargetComponent* ThrowTarget = MinionInterface->GetActiveThrowTarget();
 		if (bOnlyDetachIfReachable)
 		{
-			const FVector CheckOrigin = IsValid(ThrowTarget) ? ThrowTarget->GetComponentLocation() : MinionActor->GetActorLocation();
+			const FVector CheckOrigin = IsValid(ThrowTarget)
+				                            ? ThrowTarget->GetComponentLocation()
+				                            : MinionActor->GetActorLocation();
 			if (!CanWorldLocationReachPlayer(CheckOrigin))
 			{
 				// No valid path back to player: stay at the interactable until player has a path or hits a checkpoint
@@ -2770,7 +2993,7 @@ void UMinionSquadComponent::ResetMinionsToPlayerCheckpoint(bool bDetachFromInter
 				ThrowTarget->ReleaseMinion(MinionActor, FVector::ZeroVector, true);
 			}
 			else if (MinionInterface->GetMinionState() == EMinionState::InThrowFlight ||
-					 MinionInterface->GetMinionState() == EMinionState::LatchedToTarget)
+				MinionInterface->GetMinionState() == EMinionState::LatchedToTarget)
 			{
 				MinionInterface->DetachFromThrowTarget(FVector::ZeroVector, true);
 			}
@@ -2814,20 +3037,23 @@ void UMinionSquadComponent::ResetMinionsToPlayerCheckpoint(bool bDetachFromInter
 		FollowStanceInstance->ForceImmediateEvaluation();
 	}
 
-	BroadcastDebug(FString::Printf(TEXT("Checkpoint Reset: Teleported %d minions to player and cleared affected interactables."), MinionCount), FColor::Green, 2.5f);
+	BroadcastDebug(
+		FString::Printf(
+			TEXT("Checkpoint Reset: Teleported %d minions to player and cleared affected interactables."), MinionCount),
+		FColor::Green, 2.5f);
 }
 
 void UMinionSquadComponent::UnregisterMinion(AActor* MinionActor)
 {
-	if (!IsValid(MinionActor)) return;
-	
-	
+	if (!IsValid(MinionActor))
+	{
+		return;
+	}
+
 
 	const int32 FoundIdx = ActiveMinions.IndexOfByKey(MinionActor);
 	if (FoundIdx != INDEX_NONE)
 	{
-		
-		
 		if (IMinionAgentInterface* MinionInterface = ActiveMinionInterfaces[FoundIdx].GetInterface())
 		{
 			if (UMinionThrowTargetComponent* ThrowTarget = MinionInterface->GetActiveThrowTarget())
@@ -2865,7 +3091,10 @@ void UMinionSquadComponent::OnPlayerAvoidanceOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (CurrentStance != EMinionSquadStance::Follow) return;
+	if (CurrentStance != EMinionSquadStance::Follow)
+	{
+		return;
+	}
 
 	// Do not trigger lateral side-steps on narrow bridges or moving platforms
 	if (FollowStanceInstance && FollowStanceInstance->IsLateralEvadeSuppressed())
@@ -2874,7 +3103,10 @@ void UMinionSquadComponent::OnPlayerAvoidanceOverlap(
 	}
 
 	AActor* PlayerActor = GetOwner();
-	if (!PlayerActor || !IsValid(OtherActor) || OtherActor == PlayerActor) return;
+	if (!PlayerActor || !IsValid(OtherActor) || OtherActor == PlayerActor)
+	{
+		return;
+	}
 
 	if (IMinionAgentInterface* Minion = Cast<IMinionAgentInterface>(OtherActor))
 	{
@@ -2899,8 +3131,12 @@ void UMinionSquadComponent::UpdateHandAnchorTransforms(float ExtraOrbitYaw)
 
 	if (HandAnchorSpheres[1])
 	{
-		const FVector BaseLeftOffset = WhipConfig.bDualArmWhip ? WhipConfig.LeftArmLocalOffset : WhipConfig.RightArmLocalOffset;
-		const float BaseLeftYaw = WhipConfig.bDualArmWhip ? WhipConfig.LeftArmRestYawOffset : WhipConfig.RightArmRestYawOffset;
+		const FVector BaseLeftOffset = WhipConfig.bDualArmWhip
+			                               ? WhipConfig.LeftArmLocalOffset
+			                               : WhipConfig.RightArmLocalOffset;
+		const float BaseLeftYaw = WhipConfig.bDualArmWhip
+			                          ? WhipConfig.LeftArmRestYawOffset
+			                          : WhipConfig.RightArmRestYawOffset;
 
 		const FVector LeftPos = BaseLeftOffset.RotateAngleAxis(ExtraOrbitYaw, FVector::UpVector);
 		const FRotator LeftRot(0.0f, BaseLeftYaw + ExtraOrbitYaw, 0.0f);
@@ -2911,7 +3147,10 @@ void UMinionSquadComponent::UpdateHandAnchorTransforms(float ExtraOrbitYaw)
 FVector UMinionSquadComponent::CalculateWhipLinkWorldTarget(int32 StanceMinionIndex) const
 {
 	AActor* OwnerActor = GetOwner();
-	if (!OwnerActor) return GetComponentLocation();
+	if (!OwnerActor)
+	{
+		return GetComponentLocation();
+	}
 
 	const int32 ArmIndex = WhipConfig.bDualArmWhip ? (StanceMinionIndex % 2) : 0;
 	const int32 LinkIndexInArm = WhipConfig.bDualArmWhip ? (StanceMinionIndex / 2) : StanceMinionIndex;
@@ -2927,7 +3166,10 @@ FVector UMinionSquadComponent::CalculateWhipLinkWorldTarget(int32 StanceMinionIn
 void UMinionSquadComponent::SortStanceMinionsForWhipArms()
 {
 	AActor* OwnerActor = GetOwner();
-	if (!OwnerActor || PruneInvalidStanceMinions() <= 1) return;
+	if (!OwnerActor || PruneInvalidStanceMinions() <= 1)
+	{
+		return;
+	}
 
 	const FVector PlayerLoc = OwnerActor->GetActorLocation();
 	const FVector PlayerRight = OwnerActor->GetActorRightVector();
@@ -2936,7 +3178,8 @@ void UMinionSquadComponent::SortStanceMinionsForWhipArms()
 	{
 		StanceMinions.Sort([&PlayerLoc](const AActor& A, const AActor& B)
 		{
-			return FVector::DistSquared2D(A.GetActorLocation(), PlayerLoc) < FVector::DistSquared2D(B.GetActorLocation(), PlayerLoc);
+			return FVector::DistSquared2D(A.GetActorLocation(), PlayerLoc) < FVector::DistSquared2D(
+				B.GetActorLocation(), PlayerLoc);
 		});
 	}
 	else
@@ -2957,8 +3200,14 @@ void UMinionSquadComponent::SortStanceMinionsForWhipArms()
 
 		for (int32 i = 0; i < Total; ++i)
 		{
-			if (i < RightCount) RightArmPool.Add(SortedBySide[i]);
-			else LeftArmPool.Add(SortedBySide[i]);
+			if (i < RightCount)
+			{
+				RightArmPool.Add(SortedBySide[i]);
+			}
+			else
+			{
+				LeftArmPool.Add(SortedBySide[i]);
+			}
 		}
 
 		const FVector RightAnchor = HandAnchorSpheres[0] ? HandAnchorSpheres[0]->GetComponentLocation() : PlayerLoc;
@@ -2966,20 +3215,28 @@ void UMinionSquadComponent::SortStanceMinionsForWhipArms()
 
 		RightArmPool.Sort([&RightAnchor](const AActor& A, const AActor& B)
 		{
-			return FVector::DistSquared2D(A.GetActorLocation(), RightAnchor) < FVector::DistSquared2D(B.GetActorLocation(), RightAnchor);
+			return FVector::DistSquared2D(A.GetActorLocation(), RightAnchor) < FVector::DistSquared2D(
+				B.GetActorLocation(), RightAnchor);
 		});
 
 		LeftArmPool.Sort([&LeftAnchor](const AActor& A, const AActor& B)
 		{
-			return FVector::DistSquared2D(A.GetActorLocation(), LeftAnchor) < FVector::DistSquared2D(B.GetActorLocation(), LeftAnchor);
+			return FVector::DistSquared2D(A.GetActorLocation(), LeftAnchor) < FVector::DistSquared2D(
+				B.GetActorLocation(), LeftAnchor);
 		});
 
 		StanceMinions.Empty(Total);
 		const int32 MaxArmLen = FMath::Max(RightArmPool.Num(), LeftArmPool.Num());
 		for (int32 LinkIdx = 0; LinkIdx < MaxArmLen; ++LinkIdx)
 		{
-			if (LinkIdx < RightArmPool.Num()) StanceMinions.Add(RightArmPool[LinkIdx]);
-			if (LinkIdx < LeftArmPool.Num()) StanceMinions.Add(LeftArmPool[LinkIdx]);
+			if (LinkIdx < RightArmPool.Num())
+			{
+				StanceMinions.Add(RightArmPool[LinkIdx]);
+			}
+			if (LinkIdx < LeftArmPool.Num())
+			{
+				StanceMinions.Add(LeftArmPool[LinkIdx]);
+			}
 		}
 	}
 
@@ -2993,22 +3250,29 @@ void UMinionSquadComponent::SortStanceMinionsForWhipArms()
 	}
 }
 
-void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkIndexInArm, const FVector& StartLoc, const FVector& EndLoc)
+void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkIndexInArm, const FVector& StartLoc,
+                                                const FVector& EndLoc)
 {
 	UWorld* World = GetWorld();
 	AActor* PlayerActor = GetOwner();
-	if (!World || !PlayerActor || !MinionActor) return;
+	if (!World || !PlayerActor || !MinionActor)
+	{
+		return;
+	}
 
 	// Guard against degenerate zero-length sweeps (e.g., slow frames or right after HitStop)
 	const FVector SafeEndLoc = StartLoc.Equals(EndLoc, 0.1f)
-		? (EndLoc + FVector(0.0f, 0.0f, 1.0f))
-		: EndLoc;
+		                           ? (EndLoc + FVector(0.0f, 0.0f, 1.0f))
+		                           : EndLoc;
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MinionWhipSweep), false, PlayerActor);
 	QueryParams.AddIgnoredActor(PlayerActor);
 	for (AActor* SquadMinion : ActiveMinions)
 	{
-		if (IsValid(SquadMinion)) QueryParams.AddIgnoredActor(SquadMinion);
+		if (IsValid(SquadMinion))
+		{
+			QueryParams.AddIgnoredActor(SquadMinion);
+		}
 	}
 
 	TArray<FHitResult> HitResults;
@@ -3026,8 +3290,8 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	{
 		// White = empty sweep volume | Yellow = overlap hit(s) detected | Red = blocking hit detected
 		const FColor SweepColor = HitResults.IsEmpty()
-			? FColor::White
-			: (bBlockingHitFound ? FColor::Red : FColor::Yellow);
+			                          ? FColor::White
+			                          : (bBlockingHitFound ? FColor::Red : FColor::Yellow);
 
 		DrawDebugSphere(World, SafeEndLoc, WhipConfig.HitSphereRadius, 10, SweepColor, false, 0.05f, 0, 1.0f);
 		DrawDebugLine(World, StartLoc, SafeEndLoc, SweepColor, false, 0.05f, 0, 1.5f);
@@ -3046,7 +3310,10 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 	{
 		AActor* HitActor = Hit.GetActor();
 		UPrimitiveComponent* HitComp = Hit.GetComponent();
-		if (!IsValid(HitActor)) continue;
+		if (!IsValid(HitActor))
+		{
+			continue;
+		}
 
 		// 1. Check Whip Per-Target Cooldown
 		if (const double* LastHitTime = HitActorTimestamps.Find(HitActor))
@@ -3057,7 +3324,7 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 				if (bDebugDrawSlots)
 				{
 					UE_LOG(LogTemp, Verbose, TEXT("[WhipDebug] Ignored %s (%s): Whip Cooldown %.2f / %.2fs"),
-						*GetNameSafe(HitActor), *GetNameSafe(HitComp), Elapsed, WhipConfig.HitCooldownPerTarget);
+					       *GetNameSafe(HitActor), *GetNameSafe(HitComp), Elapsed, WhipConfig.HitCooldownPerTarget);
 				}
 				continue;
 			}
@@ -3116,8 +3383,9 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 		// Log why a valid combat target rejected the hit (i-frames or already dead)
 		if (bHandledByCombatTarget && !HitResponse.bHitAccepted)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[WhipDebug] Target %s (%s) REJECTED hit (i-frames or dead). RemainingHearts=%d"),
-				*GetNameSafe(HitActor), *GetNameSafe(HitComp), HitResponse.RemainingHearts);
+			UE_LOG(LogTemp, Warning,
+			       TEXT("[WhipDebug] Target %s (%s) REJECTED hit (i-frames or dead). RemainingHearts=%d"),
+			       *GetNameSafe(HitActor), *GetNameSafe(HitComp), HitResponse.RemainingHearts);
 
 			if (bDebugDrawSlots)
 			{
@@ -3134,8 +3402,8 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			Payload.MaxHearts = HitResponse.MaxHearts;
 			Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
 			Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
-				? FeedbackCfg.KillHitStopDuration
-				: FeedbackCfg.HitStopDuration;
+				                                 ? FeedbackCfg.KillHitStopDuration
+				                                 : FeedbackCfg.HitStopDuration;
 
 			if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
 			{
@@ -3145,7 +3413,9 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			OnWhipCombatFeedback.Broadcast(Payload);
 
 			BroadcastDebug(
-				FString::Printf(TEXT("WHIP HIT %s [Comp: %s | Block:%d] -> -%d Heart (%d/%d left) | Kill:%d | WhipZ:%.0f vs TargetZ:%.0f"),
+				FString::Printf(
+					TEXT(
+						"WHIP HIT %s [Comp: %s | Block:%d] -> -%d Heart (%d/%d left) | Kill:%d | WhipZ:%.0f vs TargetZ:%.0f"),
 					*GetNameSafe(HitActor),
 					*GetNameSafe(HitComp),
 					Hit.bBlockingHit ? 1 : 0,
@@ -3160,8 +3430,11 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[WhipDebug] Swept %s (%s) [Block:%d] but it has NO IHitReactableInterface or UHeartHealthComponent!"),
-				*GetNameSafe(HitActor), *GetNameSafe(HitComp), Hit.bBlockingHit ? 1 : 0);
+			UE_LOG(LogTemp, Warning,
+			       TEXT(
+				       "[WhipDebug] Swept %s (%s) [Block:%d] but it has NO IHitReactableInterface or UHeartHealthComponent!"
+			       ),
+			       *GetNameSafe(HitActor), *GetNameSafe(HitComp), Hit.bBlockingHit ? 1 : 0);
 		}
 
 		// Preserve existing UE5 PointDamage + OnWhipDamageHit compatibility
@@ -3171,8 +3444,8 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 			APawn* InstigatorPawn = Cast<APawn>(PlayerActor);
 			AController* InstigatorController = InstigatorPawn ? InstigatorPawn->GetController() : nullptr;
 			TSubclassOf<UDamageType> DmgType = WhipConfig.DamageTypeClass
-				? WhipConfig.DamageTypeClass
-				: TSubclassOf<UDamageType>(UDamageType::StaticClass());
+				                                   ? WhipConfig.DamageTypeClass
+				                                   : TSubclassOf<UDamageType>(UDamageType::StaticClass());
 
 			UGameplayStatics::ApplyPointDamage(
 				HitActor,
@@ -3188,8 +3461,10 @@ void UMinionSquadComponent::PerformWhipHitSweep(AActor* MinionActor, int32 LinkI
 
 		if (bDebugDrawSlots)
 		{
-			DrawDebugSphere(World, Payload.ImpactPoint, 28.0f, 12, Payload.bIsKillingBlow ? FColor::Yellow : FColor::Green, false, 0.8f, 0, 2.5f);
-			DrawDebugDirectionalArrow(World, Payload.ImpactPoint, Payload.ImpactPoint + (KnockDir * 120.0f), 25.0f, FColor::Cyan, false, 0.8f, 0, 2.5f);
+			DrawDebugSphere(World, Payload.ImpactPoint, 28.0f, 12,
+			                Payload.bIsKillingBlow ? FColor::Yellow : FColor::Green, false, 0.8f, 0, 2.5f);
+			DrawDebugDirectionalArrow(World, Payload.ImpactPoint, Payload.ImpactPoint + (KnockDir * 120.0f), 25.0f,
+			                          FColor::Cyan, false, 0.8f, 0, 2.5f);
 		}
 	}
 }
@@ -3200,7 +3475,7 @@ FVector UMinionSquadComponent::CalculateSlotWorldLocation(int32 SlotIndex) const
 	const int32 Row = SlotIndex / ColumnsPerRow;
 	const int32 Col = SlotIndex % ColumnsPerRow;
 
-	const float CenterOffset = (ColumnsPerRow - 1) * 0.5f;
+	constexpr float CenterOffset = (ColumnsPerRow - 1) * 0.5f;
 	const float NormalizedCol = FMath::Abs(Col - CenterOffset);
 	const float CrescentPullback = (NormalizedCol > 1.0f) ? 25.0f : 0.0f;
 

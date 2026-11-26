@@ -6,7 +6,8 @@
 #include "Camera/CameraShakeBase.h"
 #include "Engine/World.h"
 
-void UHitFeedbackSubsystem::TriggerCombatFeedback(const FCombatHitPayload& Payload, const FHitFeedbackConfig& FeedbackConfig)
+void UHitFeedbackSubsystem::TriggerCombatFeedback(const FCombatHitPayload& Payload,
+                                                  const FHitFeedbackConfig& FeedbackConfig)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -15,8 +16,8 @@ void UHitFeedbackSubsystem::TriggerCombatFeedback(const FCombatHitPayload& Paylo
 	}
 
 	const float DesiredHitStop = Payload.bIsKillingBlow
-		? FeedbackConfig.KillHitStopDuration
-		: FeedbackConfig.HitStopDuration;
+		                             ? FeedbackConfig.KillHitStopDuration
+		                             : FeedbackConfig.HitStopDuration;
 
 	if (DesiredHitStop > KINDA_SMALL_NUMBER)
 	{
@@ -25,8 +26,8 @@ void UHitFeedbackSubsystem::TriggerCombatFeedback(const FCombatHitPayload& Paylo
 
 	// Play Camera Shake on the local player controller
 	TSubclassOf<UCameraShakeBase> ShakeClass = (Payload.bIsKillingBlow && FeedbackConfig.KillCameraShake)
-		? FeedbackConfig.KillCameraShake
-		: FeedbackConfig.HitCameraShake;
+		                                           ? FeedbackConfig.KillCameraShake
+		                                           : FeedbackConfig.HitCameraShake;
 
 	if (ShakeClass && FeedbackConfig.CameraShakeScale > KINDA_SMALL_NUMBER)
 	{

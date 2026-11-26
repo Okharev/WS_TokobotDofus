@@ -136,8 +136,8 @@ void ABoarAIController::HandlePawnTakeAnyDamage(
 	}
 
 	AActor* Attacker = (InstigatedBy && InstigatedBy->GetPawn())
-		? Cast<AActor>(InstigatedBy->GetPawn())
-		: DamageCauser;
+		                   ? Cast<AActor>(InstigatedBy->GetPawn())
+		                   : DamageCauser;
 
 	TryAggroFromAttacker(Attacker);
 }

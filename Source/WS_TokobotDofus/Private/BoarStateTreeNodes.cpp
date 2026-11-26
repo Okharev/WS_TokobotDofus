@@ -57,7 +57,8 @@ void FBoarStatusEvaluator::Tick(FStateTreeExecutionContext& Context, const float
 // ----------------------------------------------------------------------------
 // FBoarFindPatrolPointTask
 // ----------------------------------------------------------------------------
-EStateTreeRunStatus FBoarFindPatrolPointTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+EStateTreeRunStatus FBoarFindPatrolPointTask::EnterState(FStateTreeExecutionContext& Context,
+                                                         const FStateTreeTransitionResult& Transition) const
 {
 	FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (!Data.AIController || !Data.BoarPawn)
@@ -86,7 +87,8 @@ EStateTreeRunStatus FBoarFindPatrolPointTask::EnterState(FStateTreeExecutionCont
 // ----------------------------------------------------------------------------
 // FBoarChargeUpTask
 // ----------------------------------------------------------------------------
-EStateTreeRunStatus FBoarChargeUpTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+EStateTreeRunStatus FBoarChargeUpTask::EnterState(FStateTreeExecutionContext& Context,
+                                                  const FStateTreeTransitionResult& Transition) const
 {
 	FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (!Data.AIController || !Data.BoarPawn || !IsValid(Data.TargetActor))
@@ -104,8 +106,8 @@ EStateTreeRunStatus FBoarChargeUpTask::EnterState(FStateTreeExecutionContext& Co
 	Data.BoarPawn->SetAIState(EBoarAIState::ChargeUp);
 
 	return RushComp->StartChargeUp(Data.TargetActor)
-		? EStateTreeRunStatus::Running
-		: EStateTreeRunStatus::Failed;
+		       ? EStateTreeRunStatus::Running
+		       : EStateTreeRunStatus::Failed;
 }
 
 EStateTreeRunStatus FBoarChargeUpTask::Tick(FStateTreeExecutionContext& Context, const float DeltaTime) const
@@ -117,11 +119,12 @@ EStateTreeRunStatus FBoarChargeUpTask::Tick(FStateTreeExecutionContext& Context,
 	}
 
 	return Data.BoarPawn->GetRushComponent()->IsChargingUp()
-		? EStateTreeRunStatus::Running
-		: EStateTreeRunStatus::Succeeded;
+		       ? EStateTreeRunStatus::Running
+		       : EStateTreeRunStatus::Succeeded;
 }
 
-void FBoarChargeUpTask::ExitState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+void FBoarChargeUpTask::ExitState(FStateTreeExecutionContext& Context,
+                                  const FStateTreeTransitionResult& Transition) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (Data.BoarPawn && Data.BoarPawn->GetRushComponent() && Data.BoarPawn->GetRushComponent()->IsChargingUp())
@@ -133,7 +136,8 @@ void FBoarChargeUpTask::ExitState(FStateTreeExecutionContext& Context, const FSt
 // ----------------------------------------------------------------------------
 // FBoarExecuteRushTask
 // ----------------------------------------------------------------------------
-EStateTreeRunStatus FBoarExecuteRushTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+EStateTreeRunStatus FBoarExecuteRushTask::EnterState(FStateTreeExecutionContext& Context,
+                                                     const FStateTreeTransitionResult& Transition) const
 {
 	FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (!Data.AIController || !Data.BoarPawn)
@@ -151,8 +155,8 @@ EStateTreeRunStatus FBoarExecuteRushTask::EnterState(FStateTreeExecutionContext&
 	Data.BoarPawn->SetAIState(EBoarAIState::Rushing);
 
 	return RushComp->ExecuteRush()
-		? EStateTreeRunStatus::Running
-		: EStateTreeRunStatus::Failed;
+		       ? EStateTreeRunStatus::Running
+		       : EStateTreeRunStatus::Failed;
 }
 
 EStateTreeRunStatus FBoarExecuteRushTask::Tick(FStateTreeExecutionContext& Context, const float DeltaTime) const
@@ -172,11 +176,12 @@ EStateTreeRunStatus FBoarExecuteRushTask::Tick(FStateTreeExecutionContext& Conte
 	}
 
 	return RushComp->IsRushing()
-		? EStateTreeRunStatus::Running
-		: EStateTreeRunStatus::Succeeded;
+		       ? EStateTreeRunStatus::Running
+		       : EStateTreeRunStatus::Succeeded;
 }
 
-void FBoarExecuteRushTask::ExitState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+void FBoarExecuteRushTask::ExitState(FStateTreeExecutionContext& Context,
+                                     const FStateTreeTransitionResult& Transition) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (Data.BoarPawn && Data.BoarPawn->GetRushComponent() && Data.BoarPawn->GetRushComponent()->IsRushing())
@@ -188,7 +193,8 @@ void FBoarExecuteRushTask::ExitState(FStateTreeExecutionContext& Context, const 
 // ----------------------------------------------------------------------------
 // FBoarStunnedTask
 // ----------------------------------------------------------------------------
-EStateTreeRunStatus FBoarStunnedTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+EStateTreeRunStatus FBoarStunnedTask::EnterState(FStateTreeExecutionContext& Context,
+                                                 const FStateTreeTransitionResult& Transition) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (!Data.AIController || !Data.BoarPawn)
@@ -210,14 +216,15 @@ EStateTreeRunStatus FBoarStunnedTask::Tick(FStateTreeExecutionContext& Context, 
 	}
 
 	return Data.BoarPawn->GetRushComponent()->IsStunnedVulnerable()
-		? EStateTreeRunStatus::Running
-		: EStateTreeRunStatus::Succeeded;
+		       ? EStateTreeRunStatus::Running
+		       : EStateTreeRunStatus::Succeeded;
 }
 
 // ----------------------------------------------------------------------------
 // FBoarSetAIStateTask
 // ----------------------------------------------------------------------------
-EStateTreeRunStatus FBoarSetAIStateTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
+EStateTreeRunStatus FBoarSetAIStateTask::EnterState(FStateTreeExecutionContext& Context,
+                                                    const FStateTreeTransitionResult& Transition) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
 	if (Data.BoarPawn)

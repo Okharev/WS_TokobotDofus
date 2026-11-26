@@ -7,7 +7,9 @@
 #include "HitFeedbackSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGlobalCombatHitSignature, const FCombatHitPayload&, HitPayload);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHitStopStateSignature, float, Duration, float, TimeDilation);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnHitStopEndedSignature);
 
 /**

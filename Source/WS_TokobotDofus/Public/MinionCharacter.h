@@ -27,7 +27,8 @@ public:
 	// ~Begin IMinionAgentInterface
 	virtual EMinionState GetMinionState() const override { return CurrentState; }
 	virtual bool MoveToSquadSlot(const FVector& ProjectedSlotLocation) override;
-	virtual void EvadePlayer(const FVector& PlayerLocation, const FVector& PlayerVelocity, const FVector& PlayerRight) override;
+	virtual void EvadePlayer(const FVector& PlayerLocation, const FVector& PlayerVelocity,
+	                         const FVector& PlayerRight) override;
 	virtual void ExecuteNavLinkJump(ANavLinkProxy* NavLink, const FVector& LaunchVelocity) override;
 	virtual void SetWhipModeEnabled(bool bEnabled) override;
 	virtual void SetCarryRushModeEnabled(bool bEnabled) override;
@@ -103,7 +104,8 @@ protected:
 	float MaxCatchUpSpeedMultiplier = 1.35f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Juice")
-	TObjectPtr<USquashStretchComponent> SquashStretchComp = CreateDefaultSubobject<USquashStretchComponent>(TEXT("SquashStretch"));
+	TObjectPtr<USquashStretchComponent> SquashStretchComp = CreateDefaultSubobject<USquashStretchComponent>(
+		TEXT("SquashStretch"));
 
 private:
 	AAIController* EnsureAIController();

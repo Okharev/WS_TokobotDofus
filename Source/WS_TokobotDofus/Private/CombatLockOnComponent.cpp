@@ -260,7 +260,7 @@ bool UCombatLockOnComponent::CycleNextTarget(bool bOnlyUnvisited)
 			Angle += 2.0f * PI; // Wrap to (0, 2*PI] so 0 is strictly ahead in sweep direction
 		}
 
-		Candidates.Add({ Candidate, Angle, DistSq });
+		Candidates.Add({Candidate, Angle, DistSq});
 	}
 
 	if (Candidates.Num() == 0)
@@ -495,12 +495,13 @@ UCombatLockOnTargetComponent* UCombatLockOnComponent::FindBestAcquisitionTarget(
 			continue;
 		}
 
-		const float AngleNorm = FMath::Clamp((Dot - CosHalfCone) / FMath::Max(1.0f - CosHalfCone, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+		const float AngleNorm = FMath::Clamp((Dot - CosHalfCone) / FMath::Max(1.0f - CosHalfCone, KINDA_SMALL_NUMBER),
+		                                     0.0f, 1.0f);
 		const float DistNorm = 1.0f - FMath::Clamp(Dist / FMath::Max(EffectiveRange, 1.0f), 0.0f, 1.0f);
 		const float PriorityNorm = FMath::Clamp(TargetComp->GetPriorityWeight() * 0.5f, 0.0f, 1.0f);
 
 		const float Score = (0.55f * AngleNorm) + (0.35f * DistNorm) + (0.10f * PriorityNorm);
-		Candidates.Add({ TargetComp, Score });
+		Candidates.Add({TargetComp, Score});
 	}
 
 	Candidates.Sort([](const FScoredCandidate& A, const FScoredCandidate& B)
@@ -722,7 +723,8 @@ void UCombatLockOnComponent::TickComponent(
 	// Smoothly face the locked enemy (works identically in Free 3P and Fixed Camera Zones)
 	if (!bPauseLockFacing)
 	{
-		const FVector ToTarget = (TargetComp->GetLockWorldLocation() - OwnerActor->GetActorLocation()).GetSafeNormal2D();
+		const FVector ToTarget = (TargetComp->GetLockWorldLocation() - OwnerActor->GetActorLocation()).
+			GetSafeNormal2D();
 		if (!ToTarget.IsNearlyZero())
 		{
 			const FRotator CurrentRot = OwnerActor->GetActorRotation();
@@ -739,7 +741,8 @@ void UCombatLockOnComponent::TickComponent(
 			const FVector TargetLoc = TargetComp->GetLockWorldLocation();
 			const FColor Color = (TimeOccluded > 0.0f) ? FColor::Orange : FColor::Magenta;
 			DrawDebugSphere(World, TargetLoc, 30.0f, 12, Color, false, -1.0f, 0, 2.5f);
-			DrawDebugLine(World, OwnerActor->GetActorLocation() + FVector(0.f, 0.f, 65.f), TargetLoc, Color, false, -1.0f, 0, 1.5f);
+			DrawDebugLine(World, OwnerActor->GetActorLocation() + FVector(0.f, 0.f, 65.f), TargetLoc, Color, false,
+			              -1.0f, 0, 1.5f);
 		}
 	}
 }

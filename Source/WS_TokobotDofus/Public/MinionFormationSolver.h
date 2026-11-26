@@ -10,10 +10,10 @@ class UNavigationSystemV1;
 UENUM(BlueprintType)
 enum class EMinionFormationMode : uint8
 {
-	Crescent        UMETA(DisplayName = "Open Crescent (4-Col)"),
-	DoubleFile      UMETA(DisplayName = "Medium Corridor (2-Col)"),
+	Crescent UMETA(DisplayName = "Open Crescent (4-Col)"),
+	DoubleFile UMETA(DisplayName = "Medium Corridor (2-Col)"),
 	SingleFileTrail UMETA(DisplayName = "Thin Bridge / Single-File Trail"),
-	AdaptiveFan     UMETA(DisplayName = "Wall / Ledge Adaptive Fan")
+	AdaptiveFan UMETA(DisplayName = "Wall / Ledge Adaptive Fan")
 };
 
 /**

@@ -140,8 +140,8 @@ void ABirdAIController::HandlePawnTakeAnyDamage(
 
 	// Prefer the instigating controller's Pawn (Player) over DamageCauser (e.g., Minion or Projectile)
 	AActor* Attacker = (InstigatedBy && InstigatedBy->GetPawn())
-		? Cast<AActor>(InstigatedBy->GetPawn())
-		: DamageCauser;
+		                   ? Cast<AActor>(InstigatedBy->GetPawn())
+		                   : DamageCauser;
 
 	TryAggroFromAttacker(Attacker);
 }

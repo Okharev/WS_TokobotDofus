@@ -19,7 +19,8 @@ public:
 	USquashStretchComponent();
 
 	virtual void BeginPlay() override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	/** Sets continuous speed-based elongation along an owner-local axis (e.g., ForwardVector during flight). */
 	UFUNCTION(BlueprintCallable, Category = "Juice|SquashStretch")
@@ -53,7 +54,8 @@ protected:
 	float StretchMaxSpeed = 2400.0f;
 
 	/** Maximum additive elongation along flight axis (0.45 = 1.45x length, ~0.83x width/height). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|SpeedStretch", meta = (ClampMin = "0.0", ClampMax = "1.2"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|SpeedStretch",
+		meta = (ClampMin = "0.0", ClampMax = "1.2"))
 	float MaxSpeedStretchAmount = 0.48f;
 
 	/** Spring stiffness (higher = snappier wobble). */

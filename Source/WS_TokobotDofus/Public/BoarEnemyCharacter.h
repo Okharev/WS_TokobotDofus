@@ -12,9 +12,14 @@ class UBoarRushComponent;
 class USceneComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBoarAggroChangedSignature, bool, bIsAggroed, AActor*, TargetActor);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBoarAIStateChangedSignature, EBoarAIState, OldState, EBoarAIState, NewState);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBoarAIStateChangedSignature, EBoarAIState, OldState, EBoarAIState,
+                                             NewState);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBoarClashedSignature, AActor*, ClashedActor);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBoarStunChangedSignature, bool, bIsStunnedVulnerable);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBoarHitDeflectedSignature, const FCombatHitPayload&, DeflectedPayload);
 
 UCLASS(Blueprintable)
@@ -77,7 +82,8 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Boar|Events", meta = (DisplayName = "On Rush Clashed"))
 	void BP_OnRushClashed(AActor* ClashedActor);
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Boar|Events", meta = (DisplayName = "On Stun Vulnerability Changed"))
+	UFUNCTION(BlueprintImplementableEvent, Category = "Boar|Events",
+		meta = (DisplayName = "On Stun Vulnerability Changed"))
 	void BP_OnStunVulnerabilityChanged(bool bIsStunnedVulnerable);
 
 	/** Fires when an attack bounces off the Boar's armored hide (play metallic/thick hide clang VFX & SFX). */

@@ -22,7 +22,8 @@ public:
 	UMinionLocomotionJuiceComponent();
 
 	virtual void BeginPlay() override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	/** Fires when a running minion brakes or reverses sharply (bind dust VFX / foot skid SFX here). */
 	UPROPERTY(BlueprintAssignable, Category = "Juice|Locomotion")
@@ -44,9 +45,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Locomotion")
 	bool bApplyToOwnerMeshRotation = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Banking", meta = (ClampMin = "0.0", ClampMax = "45.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Banking",
+		meta = (ClampMin = "0.0", ClampMax = "45.0"))
 	float MaxBankRollDegrees = 22.0f;
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Lean", meta = (ClampMin = "0.0", ClampMax = "35.0"))
 	float MaxForwardLeanDegrees = 16.0f;
 
@@ -69,10 +71,11 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Smoothing")
 	float ReferenceMaxSpeed = 520.0f;
-	
-	
+
+
 	// Update these defaults / add deadzone & filter tuning in protected:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Banking", meta = (ClampMin = "0.0", ClampMax = "180.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Banking",
+		meta = (ClampMin = "0.0", ClampMax = "180.0"))
 	float BankYawRateDeadzone = 55.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice|Banking")

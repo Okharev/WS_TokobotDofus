@@ -13,9 +13,9 @@ class UCharacterMovementComponent;
 UENUM(BlueprintType)
 enum class ELockOnRepressBehavior : uint8
 {
-	ToggleOff        UMETA(DisplayName = "Toggle Off (Classic)"),
+	ToggleOff UMETA(DisplayName = "Toggle Off (Classic)"),
 	CycleThenRelease UMETA(DisplayName = "Cycle Around Player, Then Release"),
-	CycleAndWrap     UMETA(DisplayName = "Cycle Around Player Infinitely (Use Hold to Release)")
+	CycleAndWrap UMETA(DisplayName = "Cycle Around Player Infinitely (Use Hold to Release)")
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
@@ -40,7 +40,8 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	// --- Events ---
 	/** Bind your HUD Reticle Widget and combat SFX here. */
@@ -111,19 +112,23 @@ public:
 
 protected:
 	// --- Acquisition & Range ---
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition", meta = (ClampMin = "200.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition",
+		meta = (ClampMin = "200.0", Units = "cm"))
 	float MaxGlobalLockRange = 2200.0f;
 
 	/** Extra distance allowed before breaking an active lock (prevents range-edge flicker). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition", meta = (ClampMin = "0.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition",
+		meta = (ClampMin = "0.0", Units = "cm"))
 	float BreakDistanceBuffer = 400.0f;
 
 	/** Half-angle of the initial camera acquisition cone (degrees). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition", meta = (ClampMin = "15.0", ClampMax = "90.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition",
+		meta = (ClampMin = "15.0", ClampMax = "90.0"))
 	float AcquisitionConeHalfAngleDegrees = 55.0f;
 
 	/** Enemies within this radius can be acquired on initial press even outside the camera cone. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition", meta = (ClampMin = "0.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition",
+		meta = (ClampMin = "0.0", Units = "cm"))
 	float CloseProximityFallbackRadius = 450.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Acquisition")
@@ -135,7 +140,8 @@ protected:
 	ELockOnRepressBehavior RepressBehavior = ELockOnRepressBehavior::CycleThenRelease;
 
 	/** 360-degree radius around the player searched when cycling enemies (0 = uses MaxGlobalLockRange). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Cycling", meta = (ClampMin = "0.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Cycling",
+		meta = (ClampMin = "0.0", Units = "cm"))
 	float CycleSearchRadius = 0.0f;
 
 	/** True = sweep clockwise around the player (left-to-right in front); False = counter-clockwise. */
@@ -143,18 +149,22 @@ protected:
 	bool bCycleClockwise = true;
 
 	/** In CycleAndWrap mode, releases lock if you press again when no other enemy exists around the player. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Cycling", meta = (EditCondition = "RepressBehavior == ELockOnRepressBehavior::CycleAndWrap"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Cycling",
+		meta = (EditCondition = "RepressBehavior == ELockOnRepressBehavior::CycleAndWrap"))
 	bool bReleaseIfNoOtherCycleTarget = true;
 
 	// --- Target Switching (Right Stick / Mouse Flick) ---
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Switching", meta = (ClampMin = "0.2", ClampMax = "0.95"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Switching",
+		meta = (ClampMin = "0.2", ClampMax = "0.95"))
 	float SwitchInputThreshold = 0.65f;
 
 	/** Stick magnitude must drop below this value before a new stick switch is armed. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Switching", meta = (ClampMin = "0.05", ClampMax = "0.5"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Switching",
+		meta = (ClampMin = "0.05", ClampMax = "0.5"))
 	float SwitchResetThreshold = 0.25f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Switching", meta = (ClampMin = "0.05", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Switching",
+		meta = (ClampMin = "0.05", Units = "s"))
 	float SwitchCooldown = 0.22f;
 
 	/** Set true if your IA_Look Y axis is already negated (screen-down positive). */
@@ -162,21 +172,25 @@ protected:
 	bool bInvertSwitchVerticalAxis = false;
 
 	// --- Validation & Auto-Transfer ---
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Validation", meta = (ClampMin = "0.03", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Validation",
+		meta = (ClampMin = "0.03", Units = "s"))
 	float ValidationInterval = 0.1f;
 
 	/** Seconds a target can stay occluded behind a pillar/wall before lock drops. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Validation", meta = (ClampMin = "0.0", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Validation",
+		meta = (ClampMin = "0.0", Units = "s"))
 	float OcclusionGraceDuration = 1.25f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|AutoTransfer")
 	bool bAutoTransferOnKill = true;
 
 	/** Short delay after enemy death so kill hitstop reads clearly before snapping to the next enemy. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|AutoTransfer", meta = (EditCondition = "bAutoTransferOnKill", ClampMin = "0.0", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|AutoTransfer",
+		meta = (EditCondition = "bAutoTransferOnKill", ClampMin = "0.0", Units = "s"))
 	float AutoTransferDelay = 0.15f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|AutoTransfer", meta = (EditCondition = "bAutoTransferOnKill", ClampMin = "200.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|AutoTransfer",
+		meta = (EditCondition = "bAutoTransferOnKill", ClampMin = "200.0", Units = "cm"))
 	float AutoTransferRadius = 1400.0f;
 
 	// --- Character Facing ---
@@ -188,7 +202,8 @@ protected:
 	bool bDebugDrawLockOn = false;
 
 private:
-	UCombatLockOnTargetComponent* FindBestAcquisitionTarget(float MaxRadiusOverride = -1.0f, bool bRequireViewCone = true) const;
+	UCombatLockOnTargetComponent* FindBestAcquisitionTarget(float MaxRadiusOverride = -1.0f,
+	                                                        bool bRequireViewCone = true) const;
 	void SetLockedTargetInternal(UCombatLockOnTargetComponent* NewTarget);
 	void ValidateCurrentLock();
 	void HandleTargetInvalidated(UCombatLockOnTargetComponent* InvalidatedTarget, bool bWasKilled);
