@@ -205,8 +205,8 @@ FMinionFormationSolveResult FMinionFormationSolver::SolveFormation(
 	const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(*NavData, Querier, nullptr);
 
 	const FVector BackDir = CachedTrailBackDir.IsNearlyZero()
-		? -AnchorForward.GetSafeNormal2D()
-		: CachedTrailBackDir;
+		                        ? -AnchorForward.GetSafeNormal2D()
+		                        : CachedTrailBackDir;
 	const FVector RightDir = FVector::CrossProduct(FVector::UpVector, -BackDir).GetSafeNormal2D();
 	Result.TrailBackDirection = BackDir;
 	Result.DebugProbeOrigin = AnchorNavLoc;
@@ -256,16 +256,16 @@ FMinionFormationSolveResult FMinionFormationSolver::SolveFormation(
 
 	// 2. Mode selection with Hysteresis to stop doorway/bridge flickering
 	const float SingleThresh = (CurrentMode == EMinionFormationMode::SingleFileTrail)
-		? (Config.SingleFileWidthThreshold + Config.WidthHysteresis)
-		: Config.SingleFileWidthThreshold;
+		                           ? (Config.SingleFileWidthThreshold + Config.WidthHysteresis)
+		                           : Config.SingleFileWidthThreshold;
 
 	const float DoubleThresh = (CurrentMode == EMinionFormationMode::DoubleFile)
-		? (Config.DoubleFileWidthThreshold + Config.WidthHysteresis)
-		: Config.DoubleFileWidthThreshold;
+		                           ? (Config.DoubleFileWidthThreshold + Config.WidthHysteresis)
+		                           : Config.DoubleFileWidthThreshold;
 
 	const float BackThresh = (CurrentMode == EMinionFormationMode::AdaptiveFan)
-		? (Config.MinBackClearance + 25.0f)
-		: Config.MinBackClearance;
+		                         ? (Config.MinBackClearance + 25.0f)
+		                         : Config.MinBackClearance;
 
 	if (BackClear < BackThresh)
 	{
@@ -301,7 +301,8 @@ FMinionFormationSolveResult FMinionFormationSolver::SolveFormation(
 		const FVector Validated = ClampPointOnNavMesh(
 			NavSys, NavData, Filter, Querier, RayOrigin, IdealPoint, Config.WallAndLedgeMargin, bHit, ClearDist);
 
-		if (IsSlotWellSeparated(Validated, AnchorNavLoc, Result.Slots, MinSlotSepSq, bEnforcePlayerDist ? MinPlayerDistSq : 0.0f))
+		if (IsSlotWellSeparated(Validated, AnchorNavLoc, Result.Slots, MinSlotSepSq,
+		                        bEnforcePlayerDist ? MinPlayerDistSq : 0.0f))
 		{
 			Result.Slots.Add(Validated);
 			return true;
@@ -321,22 +322,26 @@ FMinionFormationSolveResult FMinionFormationSolver::SolveFormation(
 			// Compute local tangent at this point in the trail so centering works around bends
 			const FVector LocalBack = (TrailSample - PrevValidPoint).GetSafeNormal2D();
 			const FVector LocalRight = LocalBack.IsNearlyZero()
-				? RightDir
-				: FVector::CrossProduct(FVector::UpVector, -LocalBack).GetSafeNormal2D();
+				                           ? RightDir
+				                           : FVector::CrossProduct(FVector::UpVector, -LocalBack).GetSafeNormal2D();
 
 			bool bHL = false, bHR = false;
 			float cL = 0.0f, cR = 0.0f;
-			ClampPointOnNavMesh(NavSys, NavData, Filter, Querier, TrailSample, TrailSample - LocalRight * 120.0f, Config.WallAndLedgeMargin, bHL, cL);
-			ClampPointOnNavMesh(NavSys, NavData, Filter, Querier, TrailSample, TrailSample + LocalRight * 120.0f, Config.WallAndLedgeMargin, bHR, cR);
+			ClampPointOnNavMesh(NavSys, NavData, Filter, Querier, TrailSample, TrailSample - LocalRight * 120.0f,
+			                    Config.WallAndLedgeMargin, bHL, cL);
+			ClampPointOnNavMesh(NavSys, NavData, Filter, Querier, TrailSample, TrailSample + LocalRight * 120.0f,
+			                    Config.WallAndLedgeMargin, bHR, cR);
 			const FVector CenteredSample = TrailSample + LocalRight * ((cR - cL) * 0.5f);
 
 			bool bHit = false;
 			float Dist = 0.0f;
 			// Raycast sequentially from PrevValidPoint so the line bends cleanly around corners
 			const FVector Validated = ClampPointOnNavMesh(
-				NavSys, NavData, Filter, Querier, PrevValidPoint, CenteredSample, Config.WallAndLedgeMargin, bHit, Dist);
+				NavSys, NavData, Filter, Querier, PrevValidPoint, CenteredSample, Config.WallAndLedgeMargin, bHit,
+				Dist);
 
-			if (IsSlotWellSeparated(Validated, AnchorNavLoc, Result.Slots, FMath::Square(Config.MinSlotSeparation * 0.75f), MinPlayerDistSq))
+			if (IsSlotWellSeparated(Validated, AnchorNavLoc, Result.Slots,
+			                        FMath::Square(Config.MinSlotSeparation * 0.75f), MinPlayerDistSq))
 			{
 				Result.Slots.Add(Validated);
 				PrevValidPoint = Validated;
@@ -395,7 +400,8 @@ FMinionFormationSolveResult FMinionFormationSolver::SolveFormation(
 	// 5. Extreme tight-island fallback (e.g., 16 minions on a tiny pillar): relax separation so everyone gets valid ground
 	while (Result.Slots.Num() < MinionCount)
 	{
-		const float Angle = (2.0f * PI * static_cast<float>(Result.Slots.Num())) / static_cast<float>(FMath::Max(MinionCount, 1));
+		const float Angle = (2.0f * PI * static_cast<float>(Result.Slots.Num())) / static_cast<float>(FMath::Max(
+			MinionCount, 1));
 		const FVector MicroOffset = FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.0f) * 55.0f;
 		bool bHit = false;
 		float Clear = 0.0f;

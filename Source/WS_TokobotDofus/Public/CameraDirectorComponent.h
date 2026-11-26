@@ -17,7 +17,8 @@ class WS_TOKOBOTDOFUS_API UCameraDirectorComponent : public UActorComponent
 public:
 	UCameraDirectorComponent();
 
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	// --- Retro Camera Zone Stack ---
 	UFUNCTION(BlueprintCallable, Category = "Retro Camera")
@@ -67,7 +68,8 @@ public:
 	bool bLatchBasisDuringLookAt = true;
 
 	// Turning the stick past this angle (degrees) breaks the latch and smoothly aligns to the new view
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|Movement", meta = (ClampMin = "5.0", ClampMax = "180.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|Movement",
+		meta = (ClampMin = "5.0", ClampMax = "180.0"))
 	float StickBreakAngleDegrees = 35.0f;
 
 	// How fast the basis catches up to the live camera after breaking a latch mid-hold
@@ -80,7 +82,8 @@ public:
 	bool bUseTargetOrbitMovement = true;
 
 	/** Blend weight between Player (0.0) and Locked Enemy (1.0) for free-3P camera aim focus. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn", meta = (ClampMin = "0.1", ClampMax = "0.85"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn",
+		meta = (ClampMin = "0.1", ClampMax = "0.85"))
 	float LockCameraFocusWeight = 0.42f;
 
 	/** How fast free-3P ControlRotation tracks the locked duel. */
@@ -100,14 +103,17 @@ public:
 	float LockSpringArmInterpSpeed = 7.0f;
 
 	/** Clamped pitch bounds for free-3P Z-Targeting camera (degrees, negative looks slightly downward). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn", meta = (ClampMin = "-60.0", ClampMax = "10.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn",
+		meta = (ClampMin = "-60.0", ClampMax = "10.0"))
 	float LockPitchMin = -26.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn", meta = (ClampMin = "-45.0", ClampMax = "20.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn",
+		meta = (ClampMin = "-45.0", ClampMax = "20.0"))
 	float LockPitchMax = -10.0f;
 
 	/** Downward pitch angle applied on an Ocarina no-target Z-tap center snap. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn", meta = (ClampMin = "-45.0", ClampMax = "10.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn",
+		meta = (ClampMin = "-45.0", ClampMax = "10.0"))
 	float CenterSnapPitch = -14.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|LockOn", meta = (ClampMin = "1.0"))

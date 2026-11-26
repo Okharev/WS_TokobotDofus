@@ -205,14 +205,15 @@ bool AMinionCharacter::MoveToSquadSlot(const FVector& ProjectedSlotLocation)
 		MoveResult == EPathFollowingRequestResult::AlreadyAtGoal)
 	{
 		CurrentState = (MoveResult == EPathFollowingRequestResult::AlreadyAtGoal)
-			? EMinionState::Idle
-			: EMinionState::Following;
+			               ? EMinionState::Idle
+			               : EMinionState::Following;
 		return true;
 	}
 
 	CurrentState = EMinionState::Idle;
 	return false;
 }
+
 void AMinionCharacter::UpdateFollowSpeedForDistance(float DistanceToSlot, float LeaderSpeed)
 {
 	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
@@ -490,7 +491,8 @@ void AMinionCharacter::SetCarryRushModeEnabled(bool bEnabled)
 	}
 }
 
-void AMinionCharacter::EvadePlayer(const FVector& PlayerLocation, const FVector& PlayerVelocity, const FVector& PlayerRight)
+void AMinionCharacter::EvadePlayer(const FVector& PlayerLocation, const FVector& PlayerVelocity,
+                                   const FVector& PlayerRight)
 {
 	if (CurrentState == EMinionState::TraversingNavLink ||
 		CurrentState == EMinionState::InAttackWhip ||
@@ -560,8 +562,8 @@ void AMinionCharacter::EvadePlayer(const FVector& PlayerLocation, const FVector&
 		const bool bHitEdge = NavData->Raycast(StartNav.Location, DesiredEnd, HitLoc, Filter, this);
 
 		const float ClearDist = bHitEdge
-			? FMath::Max(0.0f, FVector::Dist2D(StartNav.Location, HitLoc) - EdgeMargin)
-			: EvadeStepDistance;
+			                        ? FMath::Max(0.0f, FVector::Dist2D(StartNav.Location, HitLoc) - EdgeMargin)
+			                        : EvadeStepDistance;
 
 		const float PreferenceBonus = (i == 0) ? 25.0f : 0.0f;
 		const float Score = ClearDist + PreferenceBonus;
@@ -798,7 +800,8 @@ void AMinionCharacter::Tick(float DeltaTime)
 	}
 
 	ThrowFlightElapsed += DeltaTime;
-	const float RawAlpha = FMath::Clamp(ThrowFlightElapsed / FMath::Max(ThrowFlightDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+	const float RawAlpha = FMath::Clamp(ThrowFlightElapsed / FMath::Max(ThrowFlightDuration, KINDA_SMALL_NUMBER), 0.0f,
+	                                    1.0f);
 
 	const float T = FMath::Pow(RawAlpha, 1.22f);
 	const float InvT = 1.0f - T;
@@ -843,7 +846,8 @@ void AMinionCharacter::ConfirmLatchedToThrowTarget(UMinionThrowTargetComponent* 
 
 	AttachToComponent(TargetComp, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	const FTransform SlotWorld = TargetComp->GetSlotWorldTransform(SlotIndex);
-	SetActorLocationAndRotation(SlotWorld.GetLocation(), SlotWorld.GetRotation().Rotator(), false, nullptr, ETeleportType::TeleportPhysics);
+	SetActorLocationAndRotation(SlotWorld.GetLocation(), SlotWorld.GetRotation().Rotator(), false, nullptr,
+	                            ETeleportType::TeleportPhysics);
 
 	if (SquashStretchComp)
 	{
@@ -867,15 +871,15 @@ FVector AMinionCharacter::ComputeSafeBounceVelocity(const FVector& DesiredPopVel
 
 	const UCharacterMovementComponent* MoveComp = GetCharacterMovement();
 	const float Gravity = (MoveComp && FMath::Abs(MoveComp->GetGravityZ()) > 10.0f)
-		? FMath::Abs(MoveComp->GetGravityZ())
-		: 980.0f;
+		                      ? FMath::Abs(MoveComp->GetGravityZ())
+		                      : 980.0f;
 
 	const float EstAirTime = FMath::Clamp((2.0f * FMath::Max(DesiredPopVelocity.Z, 120.0f)) / Gravity, 0.25f, 0.90f);
 	const FVector StartLoc = GetActorLocation();
 	const FVector HorizVel(DesiredPopVelocity.X, DesiredPopVelocity.Y, 0.0f);
 
 	// Test original direction, then 90°, -90°, and 180° fallback angles to avoid bouncing off cliffs
-	static constexpr float TestAnglesDeg[] = { 0.0f, 90.0f, -90.0f, 180.0f };
+	static constexpr float TestAnglesDeg[] = {0.0f, 90.0f, -90.0f, 180.0f};
 	for (float AngleDeg : TestAnglesDeg)
 	{
 		const FVector CandidateHoriz = HorizVel.RotateAngleAxis(AngleDeg, FVector::UpVector);
@@ -897,8 +901,8 @@ void AMinionCharacter::DetachFromThrowTarget(const FVector& PopVelocity, bool bS
 	SetActorTickEnabled(false);
 
 	const FVector DetachReferenceLoc = ActiveThrowTarget.IsValid()
-		? ActiveThrowTarget->GetComponentLocation()
-		: GetActorLocation();
+		                                   ? ActiveThrowTarget->GetComponentLocation()
+		                                   : GetActorLocation();
 
 	DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
 	ActiveThrowTarget.Reset();

@@ -9,8 +9,11 @@
 class ACharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBoarPhaseFinishedSignature);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBoarRushClashedSignature, AActor*, ClashedActor);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBoarStunVulnerabilityChangedSignature, bool, bIsStunnedVulnerable);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBoarRushHitSignature, AActor*, HitActor, float, DamageDealt);
 
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
@@ -22,7 +25,8 @@ public:
 	UBoarRushComponent();
 
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	/** Called by ABoarEnemyCharacter::BeginPlay to bind tuning and the tusk/snout sweep origin. */
 	void Initialize(const FBoarEnemyTuning* InTuning, USceneComponent* InRushOrigin);

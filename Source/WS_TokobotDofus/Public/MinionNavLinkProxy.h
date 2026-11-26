@@ -35,7 +35,8 @@ protected:
 	TEnumAsByte<ENavLinkDirection::Type> LinkDirection = ENavLinkDirection::BothWays;
 
 	/** Arc height parameter (0.1 = flat leap, 0.5 = standard 45-degree arc, 0.85 = high lob). */
-	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "MinionNavLink", meta = (ClampMin = "0.1", ClampMax = "0.9"))
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "MinionNavLink",
+		meta = (ClampMin = "0.1", ClampMax = "0.9"))
 	float JumpArcHeight = 0.5f;
 
 	/** Upward Z offset added to the destination point		so minions clear ledge lips cleanly. */

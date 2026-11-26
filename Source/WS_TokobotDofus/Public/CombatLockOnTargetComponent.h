@@ -77,7 +77,8 @@ protected:
 	float PriorityWeight = 1.0f;
 
 	/** Scales camera arm pull-back & framing elevation for large enemies / bosses. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Framing", meta = (ClampMin = "0.5", ClampMax = "4.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatLockOn|Framing",
+		meta = (ClampMin = "0.5", ClampMax = "4.0"))
 	float FramingRadiusScale = 1.0f;
 
 	/** Additional world-space Z/offset applied on top of this SceneComponent's location. */

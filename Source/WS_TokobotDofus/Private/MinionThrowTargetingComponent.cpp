@@ -212,8 +212,10 @@ void UMinionThrowTargetingComponent::EvaluateTargets()
 
 		const float DistFromPlayer = FMath::Sqrt(DistFromPlayerSq);
 		const float AngleNorm = bIsCombatLockedTarget
-			? 1.0f
-			: FMath::Clamp((Dot - CosHalfCone) / FMath::Max(1.0f - CosHalfCone, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+			                        ? 1.0f
+			                        : FMath::Clamp(
+				                        (Dot - CosHalfCone) / FMath::Max(1.0f - CosHalfCone, KINDA_SMALL_NUMBER), 0.0f,
+				                        1.0f);
 		const float DistNorm = 1.0f - FMath::Clamp(DistFromPlayer / FMath::Max(EffectiveMaxRange, 1.0f), 0.0f, 1.0f);
 		const float PriorityNorm = FMath::Clamp(TargetComp->GetPriorityWeight() * 0.5f, 0.0f, 1.0f);
 
@@ -227,7 +229,7 @@ void UMinionThrowTargetingComponent::EvaluateTargets()
 			Score += CombatLockScoreBonus;
 		}
 
-		ScoredCandidates.Add({ TargetComp, Score, DistFromPlayer });
+		ScoredCandidates.Add({TargetComp, Score, DistFromPlayer});
 	}
 
 	ScoredCandidates.Sort([](const FCandidateScore& A, const FCandidateScore& B)
@@ -344,12 +346,12 @@ bool UMinionThrowTargetingComponent::TryThrowMinionAtLockedTarget()
 	}
 
 	if (!MinionInterface->LaunchAtThrowTarget(
-			TargetComp,
-			ReservedSlot,
-			LaunchOrigin,
-			ThrowFlightSpeed,
-			ThrowArcHeight,
-			GetOwner()))
+		TargetComp,
+		ReservedSlot,
+		LaunchOrigin,
+		ThrowFlightSpeed,
+		ThrowArcHeight,
+		GetOwner()))
 	{
 		TargetComp->CancelReservation(ChosenMinion);
 		return false;
@@ -437,7 +439,8 @@ void UMinionThrowTargetingComponent::TickComponent(
 			const FVector SlotLoc = (NextSlot != INDEX_NONE) ? TargetComp->GetSlotWorldLocation(NextSlot) : TargetLoc;
 
 			DrawDebugSphere(World, TargetLoc, 36.0f, 12, FColor::Green, false, -1.0f, 0, 3.0f);
-			DrawDebugBox(World, SlotLoc, FVector(16.0f), TargetComp->GetComponentQuat(), FColor::Cyan, false, -1.0f, 0, 2.5f);
+			DrawDebugBox(World, SlotLoc, FVector(16.0f), TargetComp->GetComponentQuat(), FColor::Cyan, false, -1.0f, 0,
+			             2.5f);
 
 			const float DistMeters = FVector::Dist(GetLaunchOriginWorld(), TargetLoc) * 0.01f;
 			const FString Label = FString::Printf(
@@ -449,7 +452,8 @@ void UMinionThrowTargetingComponent::TickComponent(
 				DistMeters,
 				LockedTargetScore);
 
-			DrawDebugString(World, TargetLoc + FVector(0.0f, 0.0f, 55.0f), Label, nullptr, FColor::Green, 0.0f, true, 1.0f);
+			DrawDebugString(World, TargetLoc + FVector(0.0f, 0.0f, 55.0f), Label, nullptr, FColor::Green, 0.0f, true,
+			                1.0f);
 		}
 	}
 

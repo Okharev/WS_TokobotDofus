@@ -12,121 +12,125 @@ class USceneComponent;
 class UAnimMontage;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBirdAggroChangedSignature, bool, bIsAggroed, AActor*, TargetActor);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBirdAIStateChangedSignature, EBirdAIState, OldState, EBirdAIState, NewState);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBirdAIStateChangedSignature, EBirdAIState, OldState, EBirdAIState,
+                                             NewState);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBirdAttackStartedSignature, AActor*, TargetActor);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBirdAttackHitSignature, AActor*, HitActor, float, DamageDealt);
 
 UCLASS(Blueprintable)
 class WS_TOKOBOTDOFUS_API ABirdEnemyCharacter : public ACharacter, public IHitReactableInterface
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    ABirdEnemyCharacter();
+	ABirdEnemyCharacter();
 
-    virtual void BeginPlay() override;
-    virtual void Tick(float DeltaTime) override;
-    virtual void GetActorEyesViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
+	virtual void GetActorEyesViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
 
 #if WITH_EDITOR
-    virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
-    
-    virtual FCombatHitResponse ReceiveCombatHit(const FCombatHitPayload& HitPayload) override;
-    
-    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-    UFUNCTION(BlueprintPure, Category = "Bird|Combat")
-    UHeartHealthComponent* GetHealthComponent() const { return HealthComp; }
+	virtual FCombatHitResponse ReceiveCombatHit(const FCombatHitPayload& HitPayload) override;
 
-    // --- Designer Events (Bindable in Blueprints, VFX, Audio, UI) ---
-    UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
-    FBirdAggroChangedSignature OnAggroChanged;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-    UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
-    FBirdAIStateChangedSignature OnAIStateChanged;
+	UFUNCTION(BlueprintPure, Category = "Bird|Combat")
+	UHeartHealthComponent* GetHealthComponent() const { return HealthComp; }
 
-    UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
-    FBirdAttackStartedSignature OnAttackStarted;
+	// --- Designer Events (Bindable in Blueprints, VFX, Audio, UI) ---
+	UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
+	FBirdAggroChangedSignature OnAggroChanged;
 
-    UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
-    FBirdAttackHitSignature OnAttackHit;
+	UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
+	FBirdAIStateChangedSignature OnAIStateChanged;
 
-    // --- Accessors for AI, AnimBP & Designers ---
-    UFUNCTION(BlueprintPure, Category = "Bird|Config")
-    const FBirdEnemyTuning& GetTuning() const { return Tuning; }
+	UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
+	FBirdAttackStartedSignature OnAttackStarted;
 
-    UFUNCTION(BlueprintPure, Category = "Bird|Animation")
-    const FBirdAnimState& GetAnimState() const { return AnimState; }
+	UPROPERTY(BlueprintAssignable, Category = "Bird|Events")
+	FBirdAttackHitSignature OnAttackHit;
 
-    UFUNCTION(BlueprintPure, Category = "Bird|Combat")
-    bool IsAttacking() const { return AnimState.bIsAttacking; }
+	// --- Accessors for AI, AnimBP & Designers ---
+	UFUNCTION(BlueprintPure, Category = "Bird|Config")
+	const FBirdEnemyTuning& GetTuning() const { return Tuning; }
 
-    // --- State & Combat API (Driven by AIController / StateTree / AnimNotifyState) ---
-    void SetAggroState(bool bNewAggroed, AActor* NewTarget);
-    void SetAIState(EBirdAIState NewState);
+	UFUNCTION(BlueprintPure, Category = "Bird|Animation")
+	const FBirdAnimState& GetAnimState() const { return AnimState; }
 
-    bool StartAttack(AActor* TargetActor);
-    void CancelAttack();
+	UFUNCTION(BlueprintPure, Category = "Bird|Combat")
+	bool IsAttacking() const { return AnimState.bIsAttacking; }
 
-    void BeginAttackHitWindow(float InDamageMultiplier = 1.f);
-    void PerformAttackHitTrace();
-    void EndAttackHitWindow();
+	// --- State & Combat API (Driven by AIController / StateTree / AnimNotifyState) ---
+	void SetAggroState(bool bNewAggroed, AActor* NewTarget);
+	void SetAIState(EBirdAIState NewState);
+
+	bool StartAttack(AActor* TargetActor);
+	void CancelAttack();
+
+	void BeginAttackHitWindow(float InDamageMultiplier = 1.f);
+	void PerformAttackHitTrace();
+	void EndAttackHitWindow();
 
 protected:
-    // --- Blueprint Hooks for Designers (Optional overrides in BP_BirdEnemy) ---
-    UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On Aggro Changed"))
-    void BP_OnAggroChanged(bool bIsAggroed, AActor* TargetActor);
+	// --- Blueprint Hooks for Designers (Optional overrides in BP_BirdEnemy) ---
+	UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On Aggro Changed"))
+	void BP_OnAggroChanged(bool bIsAggroed, AActor* TargetActor);
 
-    UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On AI State Changed"))
-    void BP_OnAIStateChanged(EBirdAIState OldState, EBirdAIState NewState);
+	UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On AI State Changed"))
+	void BP_OnAIStateChanged(EBirdAIState OldState, EBirdAIState NewState);
 
-    UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On Attack Hit Target"))
-    void BP_OnAttackHit(AActor* HitActor, float DamageDealt);
-    
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
-    TObjectPtr<UHeartHealthComponent> HealthComp;
+	UFUNCTION(BlueprintImplementableEvent, Category = "Bird|Events", meta = (DisplayName = "On Attack Hit Target"))
+	void BP_OnAttackHit(AActor* HitActor, float DamageDealt);
 
-    UFUNCTION()
-    void HandleStaggerChanged(bool bIsStaggered);
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
+	TObjectPtr<UHeartHealthComponent> HealthComp;
 
-    UFUNCTION()
-    void HandleDeath(const FCombatHitPayload& KillingHit);
+	UFUNCTION()
+	void HandleStaggerChanged(bool bIsStaggered);
 
-    // --- Components ---
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
-    TObjectPtr<USphereComponent> HurtboxSphere;
+	UFUNCTION()
+	void HandleDeath(const FCombatHitPayload& KillingHit);
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
-    TObjectPtr<USceneComponent> AttackOrigin;
+	// --- Components ---
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
+	TObjectPtr<USphereComponent> HurtboxSphere;
 
-    // --- Tuning & Runtime State ---
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bird|Config")
-    FBirdEnemyTuning Tuning;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bird|Components")
+	TObjectPtr<USceneComponent> AttackOrigin;
 
-    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Bird|Animation")
-    FBirdAnimState AnimState;
+	// --- Tuning & Runtime State ---
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bird|Config")
+	FBirdEnemyTuning Tuning;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Bird|Animation")
+	FBirdAnimState AnimState;
 
 private:
-    void UpdateHoverAndAnimTelemetry(float DeltaTime);
-    void HandleAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-    
+	void UpdateHoverAndAnimTelemetry(float DeltaTime);
+	void HandleAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
-    void StartFallbackAttack();
-    void HandleFallbackStrikeBegin();
-    void HandleFallbackStrikeTick();
-    void HandleFallbackAttackEnd();
-    void ClearFallbackAttackTimers();
 
-    FTimerHandle FallbackWindupTimerHandle;
-    FTimerHandle FallbackStrikeTickTimerHandle;
-    FTimerHandle FallbackEndTimerHandle;
+	void StartFallbackAttack();
+	void HandleFallbackStrikeBegin();
+	void HandleFallbackStrikeTick();
+	void HandleFallbackAttackEnd();
+	void ClearFallbackAttackTimers();
 
-    float SmoothedHoverWorldZ = 0.f;
-    float LastBobOffset = 0.f;
-    float LastActorYaw = 0.f;
+	FTimerHandle FallbackWindupTimerHandle;
+	FTimerHandle FallbackStrikeTickTimerHandle;
+	FTimerHandle FallbackEndTimerHandle;
 
-    bool bHitWindowActive = false;
-    float ActiveDamageMultiplier = 1.f;
-    TSet<TWeakObjectPtr<AActor>> HitActorsThisSwing;
+	float SmoothedHoverWorldZ = 0.f;
+	float LastBobOffset = 0.f;
+	float LastActorYaw = 0.f;
+
+	bool bHitWindowActive = false;
+	float ActiveDamageMultiplier = 1.f;
+	TSet<TWeakObjectPtr<AActor>> HitActorsThisSwing;
 };

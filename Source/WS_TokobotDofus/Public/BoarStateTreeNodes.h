@@ -86,7 +86,8 @@ struct WS_TOKOBOTDOFUS_API FBoarFindPatrolPointTask : public FStateTreeTaskCommo
 	using FInstanceDataType = FBoarFindPatrolPointTaskInstanceData;
 
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
-	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context,
+	                                       const FStateTreeTransitionResult& Transition) const override;
 };
 
 // ============================================================================
@@ -115,9 +116,11 @@ struct WS_TOKOBOTDOFUS_API FBoarChargeUpTask : public FStateTreeTaskCommonBase
 	using FInstanceDataType = FBoarChargeUpTaskInstanceData;
 
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
-	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context,
+	                                       const FStateTreeTransitionResult& Transition) const override;
 	virtual EStateTreeRunStatus Tick(FStateTreeExecutionContext& Context, const float DeltaTime) const override;
-	virtual void ExitState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual void ExitState(FStateTreeExecutionContext& Context,
+	                       const FStateTreeTransitionResult& Transition) const override;
 };
 
 // ============================================================================
@@ -143,9 +146,11 @@ struct WS_TOKOBOTDOFUS_API FBoarExecuteRushTask : public FStateTreeTaskCommonBas
 	using FInstanceDataType = FBoarExecuteRushTaskInstanceData;
 
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
-	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context,
+	                                       const FStateTreeTransitionResult& Transition) const override;
 	virtual EStateTreeRunStatus Tick(FStateTreeExecutionContext& Context, const float DeltaTime) const override;
-	virtual void ExitState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual void ExitState(FStateTreeExecutionContext& Context,
+	                       const FStateTreeTransitionResult& Transition) const override;
 };
 
 // ============================================================================
@@ -171,7 +176,8 @@ struct WS_TOKOBOTDOFUS_API FBoarStunnedTask : public FStateTreeTaskCommonBase
 	using FInstanceDataType = FBoarStunnedTaskInstanceData;
 
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
-	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context,
+	                                       const FStateTreeTransitionResult& Transition) const override;
 	virtual EStateTreeRunStatus Tick(FStateTreeExecutionContext& Context, const float DeltaTime) const override;
 };
 
@@ -198,5 +204,6 @@ struct WS_TOKOBOTDOFUS_API FBoarSetAIStateTask : public FStateTreeTaskCommonBase
 	using FInstanceDataType = FBoarSetAIStateTaskInstanceData;
 
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
-	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const override;
+	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context,
+	                                       const FStateTreeTransitionResult& Transition) const override;
 };

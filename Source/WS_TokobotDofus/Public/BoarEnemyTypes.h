@@ -10,12 +10,12 @@ class UAnimMontage;
 UENUM(BlueprintType)
 enum class EBoarAIState : uint8
 {
-	Idle              UMETA(DisplayName = "Idle"),
-	Patrol            UMETA(DisplayName = "Patrol"),
-	ReturnToZone      UMETA(DisplayName = "Return To Zone"),
-	ChargeUp          UMETA(DisplayName = "Charge Up"),
-	Rushing           UMETA(DisplayName = "Rushing"),
-	Recovering        UMETA(DisplayName = "Recovering"),
+	Idle UMETA(DisplayName = "Idle"),
+	Patrol UMETA(DisplayName = "Patrol"),
+	ReturnToZone UMETA(DisplayName = "Return To Zone"),
+	ChargeUp UMETA(DisplayName = "Charge Up"),
+	Rushing UMETA(DisplayName = "Rushing"),
+	Recovering UMETA(DisplayName = "Recovering"),
 	StunnedVulnerable UMETA(DisplayName = "Stunned (Spin Vulnerable)")
 };
 
@@ -32,7 +32,8 @@ struct FBoarEnemyTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perception", meta = (ClampMin = "100.0", Units = "cm"))
 	float AggroDropRange = 1500.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perception", meta = (ClampMin = "10.0", ClampMax = "360.0", Units = "deg"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perception",
+		meta = (ClampMin = "10.0", ClampMax = "360.0", Units = "deg"))
 	float TotalVisionConeDegrees = 160.f; // Automatically halved for SightConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perception")
@@ -58,7 +59,8 @@ struct FBoarEnemyTuning
 	float AimLockFreezeWindow = 0.25f;
 
 	/** Yaw rotation speed while tracking the player during ChargeUp. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|ChargeUp", meta = (ClampMin = "30.0", Units = "deg/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|ChargeUp",
+		meta = (ClampMin = "30.0", Units = "deg/s"))
 	float ChargeUpTurnRate = 240.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|ChargeUp")

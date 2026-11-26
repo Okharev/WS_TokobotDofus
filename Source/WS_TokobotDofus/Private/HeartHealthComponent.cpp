@@ -197,7 +197,8 @@ void UHeartHealthComponent::EndStagger()
 	}
 }
 
-void UHeartHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UHeartHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                          FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
@@ -243,8 +244,8 @@ void UHeartHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	{
 		const float Remaining = static_cast<float>(FlashEndRealTime - NowReal);
 		const float Alpha = (HitFlashDuration > KINDA_SMALL_NUMBER)
-			? FMath::Clamp(Remaining / HitFlashDuration, 0.0f, 1.0f)
-			: 0.0f;
+			                    ? FMath::Clamp(Remaining / HitFlashDuration, 0.0f, 1.0f)
+			                    : 0.0f;
 
 		if (OwnerMesh && !HitFlashMaterialParam.IsNone())
 		{

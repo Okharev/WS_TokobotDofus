@@ -8,9 +8,13 @@
 
 class USkeletalMeshComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHeartsChangedSignature, int32, CurrentHearts, int32, MaxHearts, int32, DeltaHearts);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHeartsChangedSignature, int32, CurrentHearts, int32, MaxHearts, int32,
+                                               DeltaHearts);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHitReceivedSignature, const FCombatHitPayload&, HitPayload);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStaggerChangedSignature, bool, bIsStaggered);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnActorDeathSignature, const FCombatHitPayload&, KillingHitPayload);
 
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
@@ -23,7 +27,8 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	// --- Designer & Animation Events ---
 	UPROPERTY(BlueprintAssignable, Category = "Hearts|Events")
@@ -82,11 +87,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hearts|VisualFeedback")
 	FName HitFlashMaterialParam = FName("HitFlashAlpha");
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hearts|VisualFeedback", meta = (ClampMin = "0.0", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hearts|VisualFeedback",
+		meta = (ClampMin = "0.0", Units = "s"))
 	float HitFlashDuration = 0.18f;
 
 	/** Local vibration amplitude (cm) applied to the mesh during HitStop. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hearts|VisualFeedback", meta = (ClampMin = "0.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hearts|VisualFeedback",
+		meta = (ClampMin = "0.0", Units = "cm"))
 	float HitStopMeshShakeAmplitude = 5.5f;
 
 	/** Multiplier on incoming knockback (0.0 = immovable boss, 1.0 = normal, 1.3 = light bird). */

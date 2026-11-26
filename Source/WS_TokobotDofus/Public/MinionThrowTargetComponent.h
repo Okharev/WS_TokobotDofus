@@ -10,15 +10,21 @@ class UHeartHealthComponent;
 UENUM(BlueprintType)
 enum class EMinionThrowImpactBehavior : uint8
 {
-	ImpactAndBounce    UMETA(DisplayName = "Deal Damage / Trigger & Bounce Off"),
+	ImpactAndBounce UMETA(DisplayName = "Deal Damage / Trigger & Bounce Off"),
 	LatchUntilRecalled UMETA(DisplayName = "Stick Until Recalled or Released"),
-	LatchTimed         UMETA(DisplayName = "Stick for Duration Then Pop Off")
+	LatchTimed UMETA(DisplayName = "Stick for Duration Then Pop Off")
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnThrowTargetFocusChangedSignature, bool, bIsLocked, bool, bInCandidateCone);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnThrowMinionLatchedChangedSignature, AActor*, MinionActor, int32, CurrentLatchedCount, int32, MaxSlots);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnThrowTargetFocusChangedSignature, bool, bIsLocked, bool,
+                                             bInCandidateCone);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnThrowMinionLatchedChangedSignature, AActor*, MinionActor, int32,
+                                               CurrentLatchedCount, int32, MaxSlots);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnThrowThresholdReachedSignature, bool, bThresholdMet);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnThrowMinionImpactSignature, AActor*, MinionActor, AActor*, InstigatorActor);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnThrowMinionImpactSignature, AActor*, MinionActor, AActor*,
+                                             InstigatorActor);
 
 /**
  * Attach to doors, switches, platforms, or enemy skeletal sockets to make them valid single-tap throw targets.
@@ -95,11 +101,13 @@ public:
 	void CancelReservation(AActor* IncomingMinion);
 
 	/** Called by the minion when its parabolic flight reaches Alpha == 1.0. */
-	void NotifyMinionArrived(AActor* MinionActor, int32 SlotIndex, const FVector& FlightDirection, AActor* InstigatorActor);
+	void NotifyMinionArrived(AActor* MinionActor, int32 SlotIndex, const FVector& FlightDirection,
+	                         AActor* InstigatorActor);
 
 	/** Releases a specific minion (latched or in-flight). If bSnapWithoutPop is true, skips pop impulse (checkpoint reset). */
 	UFUNCTION(BlueprintCallable, Category = "MinionThrow")
-	void ReleaseMinion(AActor* MinionActor, const FVector& PopVelocity = FVector::ZeroVector, bool bSnapWithoutPop = false);
+	void ReleaseMinion(AActor* MinionActor, const FVector& PopVelocity = FVector::ZeroVector,
+	                   bool bSnapWithoutPop = false);
 
 	/** Releases every minion currently attached or flying toward this target. */
 	UFUNCTION(BlueprintCallable, Category = "MinionThrow")
@@ -111,13 +119,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior")
 	EMinionThrowImpactBehavior ImpactBehavior = EMinionThrowImpactBehavior::LatchUntilRecalled;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior", meta = (ClampMin = "1", ClampMax = "16"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior",
+		meta = (ClampMin = "1", ClampMax = "16"))
 	int32 MaxMinionSlots = 1;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior", meta = (ClampMin = "1", ClampMax = "16"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior",
+		meta = (ClampMin = "1", ClampMax = "16"))
 	int32 RequiredMinionsForThreshold = 1;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior", meta = (EditCondition = "ImpactBehavior == EMinionThrowImpactBehavior::LatchTimed", ClampMin = "0.25", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior",
+		meta = (EditCondition = "ImpactBehavior == EMinionThrowImpactBehavior::LatchTimed", ClampMin = "0.25", Units =
+			"s"))
 	float TimedLatchDuration = 4.0f;
 
 	/** Optional local offsets for latched minions. Auto-distributes in a ring around the component if left empty. */
@@ -125,17 +137,20 @@ protected:
 	TArray<FVector> LocalSlotOffsets;
 
 	/** Fallback ring radius when LocalSlotOffsets is empty and MaxMinionSlots > 1. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior", meta = (ClampMin = "0.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Behavior",
+		meta = (ClampMin = "0.0", Units = "cm"))
 	float AutoSlotRingRadius = 42.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Targeting")
 	bool bIsTargetable = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Targeting", meta = (ClampMin = "100.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Targeting",
+		meta = (ClampMin = "100.0", Units = "cm"))
 	float MaxTargetRange = 1800.0f;
 
 	/** Higher values bias lock-on toward this target (e.g., 1.2 for enemies, 1.0 for switches). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Targeting", meta = (ClampMin = "0.1", ClampMax = "3.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Targeting",
+		meta = (ClampMin = "0.1", ClampMax = "3.0"))
 	float PriorityWeight = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Bounce")
@@ -148,17 +163,20 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Combat")
 	bool bApplyCombatHitOnArrival = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Combat", meta = (EditCondition = "bApplyCombatHitOnArrival"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|Combat",
+		meta = (EditCondition = "bApplyCombatHitOnArrival"))
 	FHitFeedbackConfig ThrowHitFeedback;
 
 	/** Automatically reduces owner ACharacter's MaxWalkSpeed per latched minion (event-driven, zero tick). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|EnemySlow")
 	bool bApplyMovementSlowToOwner = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|EnemySlow", meta = (EditCondition = "bApplyMovementSlowToOwner", ClampMin = "0.0", ClampMax = "0.9"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|EnemySlow",
+		meta = (EditCondition = "bApplyMovementSlowToOwner", ClampMin = "0.0", ClampMax = "0.9"))
 	float SlowFractionPerMinion = 0.25f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|EnemySlow", meta = (EditCondition = "bApplyMovementSlowToOwner", ClampMin = "0.05", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "MinionThrow|EnemySlow",
+		meta = (EditCondition = "bApplyMovementSlowToOwner", ClampMin = "0.05", ClampMax = "1.0"))
 	float MinWalkSpeedMultiplier = 0.25f;
 
 private:
