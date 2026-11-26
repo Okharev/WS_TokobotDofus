@@ -31,27 +31,38 @@ void UMinionStance_Follow::OnEnterStance()
 {
 	if (!Squad) return;
 
-	WaitingGroupAnchorTransform = Squad->GetComponentTransform();
+	AActor* PlayerActor = Squad->GetOwner();
+	UWorld* World = Squad->GetWorld();
+	FVector StartNavLoc = PlayerActor ? PlayerActor->GetActorLocation() : Squad->GetComponentLocation();
+	const FVector StartFwd = PlayerActor ? PlayerActor->GetActorForwardVector() : Squad->GetForwardVector();
 
-	// Project initial waiting anchor onto the ground NavMesh at the takeoff/entry spot
-	if (UWorld* World = Squad->GetWorld())
+	bHasValidWaitingAnchor = false;
+	if (World)
 	{
 		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
 		{
 			FNavLocation GroundNavLoc;
-			if (NavSys->ProjectPointToNavigation(WaitingGroupAnchorTransform.GetLocation(), GroundNavLoc, FVector(250.0f, 250.0f, 500.0f)))
+			if (NavSys->ProjectPointToNavigation(StartNavLoc, GroundNavLoc, FVector(120.0f, 120.0f, 250.0f)))
 			{
-				WaitingGroupAnchorTransform.SetLocation(GroundNavLoc.Location);
+				StartNavLoc = GroundNavLoc.Location;
+				bHasValidWaitingAnchor = true;
 			}
 		}
 	}
 
-	LastAnchorLocation = WaitingGroupAnchorTransform.GetLocation();
-	LastAnchorRotation = WaitingGroupAnchorTransform.Rotator();
+	FormationSolver.Reset(StartNavLoc, StartFwd);
+	WaitingGroupAnchorTransform = FTransform(StartFwd.Rotation(), StartNavLoc);
+	LastGroundedPlayerNavLoc = StartNavLoc;
+	LastAnchorLocation = StartNavLoc;
+	LastAnchorRotation = StartFwd.Rotation();
+	LastFormationMode = FormationSolver.GetCurrentMode();
+	bSuppressingLateralEvade = false;
 	bForceNextUpdate = true;
 	LastReachableMinionCount = -1;
+	StickySlotAssignments.Reset();
+	ProgressTrackers.Reset();
 
-	if (UWorld* World = Squad->GetWorld())
+	if (World)
 	{
 		World->GetTimerManager().SetTimer(
 			FollowTimerHandle,
@@ -66,14 +77,30 @@ void UMinionStance_Follow::OnEnterStance()
 
 void UMinionStance_Follow::OnExitStance()
 {
-	if (Squad && Squad->GetWorld())
+	if (Squad)
 	{
-		Squad->GetWorld()->GetTimerManager().ClearTimer(FollowTimerHandle);
+		// Restore normal crowd separation before leaving Follow stance
+		for (int32 i = 0; i < Squad->ActiveMinionInterfaces.Num(); ++i)
+		{
+			if (IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[i].GetInterface())
+			{
+				MinionInterface->SetTightCorridorMode(false);
+			}
+		}
+
+		if (UWorld* World = Squad->GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(FollowTimerHandle);
+		}
 	}
+
+	bSuppressingLateralEvade = false;
+	ProgressTrackers.Reset();
 }
 
 void UMinionStance_Follow::OnSquadRosterChanged()
 {
+	StickySlotAssignments.Reset();
 	ForceImmediateEvaluation();
 }
 
@@ -114,20 +141,73 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 	if (MinionCount == 0) return;
 
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-	if (!NavSys || !NavSys->GetDefaultNavDataInstance())
+	const ANavigationData* NavData = NavSys ? NavSys->GetDefaultNavDataInstance() : nullptr;
+	if (!NavSys || !NavData)
 	{
 		return;
 	}
 
 	const FVector PlayerLocation = PlayerActor->GetActorLocation();
 	const FVector PlayerVelocity = PlayerActor->GetVelocity();
+	const float PlayerSpeed2D = PlayerVelocity.Size2D();
 	const FVector PlayerRight = PlayerActor->GetActorRightVector();
+	const FVector PlayerForward = PlayerActor->GetActorForwardVector();
 	const float EvadeRadiusSq = FMath::Square(Squad->PlayerEvadeRadius);
 
-	// 1. Classify each minion as Reachable vs. Stranded (skipping any minion currently carried in mid-air)
-	FVector PlayerNavLoc = PlayerLocation;
+	// 0. Moving Platform / Elevator fast-path: bypass static NavMesh queries while riding a dynamic movement base
+	const ACharacter* PlayerChar = Cast<ACharacter>(PlayerActor);
+	const UPrimitiveComponent* PlayerMoveBase = PlayerChar ? PlayerChar->GetMovementBase() : nullptr;
+	const bool bPlayerOnMovingPlatform = PlayerMoveBase && MovementBaseUtility::UseRelativeLocation(PlayerMoveBase);
+
+	if (bPlayerOnMovingPlatform)
+	{
+		bSuppressingLateralEvade = true;
+		const FTransform PlatformAnchor(PlayerForward.Rotation(), PlayerLocation);
+
+		for (int32 i = 0; i < MinionCount; ++i)
+		{
+			AActor* MinionActor = Squad->ActiveMinions[i];
+			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[i].GetInterface();
+			if (!MinionActor || !MinionInterface) continue;
+
+			const EMinionState State = MinionInterface->GetMinionState();
+			if (State == EMinionState::InCarryRush ||
+				State == EMinionState::InThrowFlight ||
+				State == EMinionState::LatchedToTarget ||
+				State == EMinionState::TraversingNavLink)
+			{
+				continue;
+			}
+
+			// Keep minions standing on the same lift compactly clustered around the player
+			const ACharacter* MinionChar = Cast<ACharacter>(MinionActor);
+			if (MinionChar && MinionChar->GetMovementBase() == PlayerMoveBase)
+			{
+				MinionInterface->SetTightCorridorMode(true);
+				const float Angle = (2.0f * PI * static_cast<float>(i)) / static_cast<float>(FMath::Max(MinionCount, 1));
+				const FVector LocalSlot = PlayerLocation + FVector(FMath::Cos(Angle) * 75.0f, FMath::Sin(Angle) * 75.0f, 0.0f);
+				const float DistToSlot = FVector::Dist2D(MinionActor->GetActorLocation(), LocalSlot);
+				MinionInterface->UpdateFollowSpeedForDistance(DistToSlot, PlayerSpeed2D);
+				if (DistToSlot > 35.0f)
+				{
+					MinionInterface->MoveToSquadSlot(LocalSlot);
+				}
+			}
+		}
+		return;
+	}
+
+	// 1. Check grounded player NavMesh location & record breadcrumb spine
+	FVector PlayerNavLoc = LastGroundedPlayerNavLoc;
 	const bool bPlayerGroundedOnNav = Squad->IsPlayerGroundedOnNavMesh(NavSys, PlayerNavLoc);
 
+	if (bPlayerGroundedOnNav)
+	{
+		LastGroundedPlayerNavLoc = PlayerNavLoc;
+		FormationSolver.RecordBreadcrumb(PlayerNavLoc, PlayerForward, Squad->FormationConfig);
+	}
+
+	// 2. Classify minions: Reachable vs. StrandedAtTakeoff vs. StrandedAtInteractable
 	TArray<int32, TInlineAllocator<16>> ReachableIndices;
 	TArray<int32, TInlineAllocator<16>> StrandedAtTakeoffIndices;
 	TArray<int32, TInlineAllocator<16>> StrandedAtInteractableIndices;
@@ -160,10 +240,14 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 		}
 	}
 
-	// Only move the shared WaitingGroupAnchorTransform when ALL non-carried, non-thrown minions can reach the player
-	if (StrandedAtTakeoffIndices.IsEmpty() && StrandedAtInteractableIndices.IsEmpty() && !ReachableIndices.IsEmpty())
+	// Only advance WaitingGroupAnchorTransform when grounded AND all follow minions can reach the player
+	if (bPlayerGroundedOnNav && StrandedAtTakeoffIndices.IsEmpty() && StrandedAtInteractableIndices.IsEmpty() && !ReachableIndices.IsEmpty())
 	{
-		WaitingGroupAnchorTransform = Squad->GetComponentTransform();
+		const FVector TrailForward = (-FormationSolver.GetLastValidTrailBackDir()).GetSafeNormal2D();
+		WaitingGroupAnchorTransform = FTransform(
+			TrailForward.IsNearlyZero() ? PlayerForward.Rotation() : TrailForward.Rotation(),
+			PlayerNavLoc);
+		bHasValidWaitingAnchor = true;
 	}
 
 	if (ReachableIndices.Num() != LastReachableMinionCount)
@@ -172,116 +256,330 @@ void UMinionStance_Follow::EvaluateFormationAndAvoidance()
 		bForceNextUpdate = true;
 	}
 
-	const FTransform LivePlayerAnchor = Squad->GetComponentTransform();
-	const FVector CurrentAnchorLoc = LivePlayerAnchor.GetLocation();
-	const FRotator CurrentAnchorRot = LivePlayerAnchor.Rotator();
+	// Stationary pivot freeze: only treat anchor as moved on actual player TRANSLATION (not in-place aiming rotation)
+	const bool bPlayerTranslated =
+		FVector::DistSquared(PlayerNavLoc, LastAnchorLocation) >= FMath::Square(Squad->AnchorMoveThreshold);
+	const bool bAnchorMoved = bForceNextUpdate || (bPlayerGroundedOnNav && bPlayerTranslated);
 
-	const bool bAnchorMoved = bForceNextUpdate ||
-		FVector::DistSquared(CurrentAnchorLoc, LastAnchorLocation) >= FMath::Square(Squad->AnchorMoveThreshold) ||
-		!CurrentAnchorRot.Equals(LastAnchorRotation, 8.0f);
-
-	if (bAnchorMoved)
+	// 3. Solve Topology-Aware Formation for Reachable Minions
+	if (!ReachableIndices.IsEmpty())
 	{
-		LastAnchorLocation = CurrentAnchorLoc;
-		LastAnchorRotation = CurrentAnchorRot;
-		bForceNextUpdate = false;
-		Squad->OnSquadMoveUpdated.Broadcast(MinionCount, CurrentAnchorLoc);
-	}
+		// Sync config spacing with squad properties while preserving topology thresholds
+		FMinionFormationConfig ActiveConfig = Squad->FormationConfig;
+		ActiveConfig.RowSpacing = Squad->RowSpacing;
+		ActiveConfig.ColumnSpacing = Squad->ColumnSpacing;
+		ActiveConfig.PlayerSafeRadius = FMath::Max(ActiveConfig.PlayerSafeRadius, Squad->PlayerEvadeRadius + 10.0f);
 
-	const FVector NavProjectionExtent(250.0f, 250.0f, 500.0f);
+		const FMinionFormationSolveResult SolveResult = FormationSolver.SolveFormation(
+			NavSys,
+			NavData,
+			PlayerActor,
+			PlayerNavLoc,
+			PlayerForward,
+			ReachableIndices.Num(),
+			ActiveConfig);
 
-	// Helper lambda to assign a group of minions (either Reachable around the Player, or Stranded around the Takeoff Anchor)
-	auto AssignGroupToAnchor = [&](const TArray<int32, TInlineAllocator<16>>& GroupIndices, const FTransform& GroupAnchor, FColor DebugSlotColor, bool bForceGroupMove)
-	{
-		const int32 GroupCount = GroupIndices.Num();
-		if (GroupCount == 0) return;
+		const bool bModeChanged = (SolveResult.ActiveMode != LastFormationMode);
+		LastFormationMode = SolveResult.ActiveMode;
+		bSuppressingLateralEvade = SolveResult.bSuppressLateralEvade;
 
-		if (Squad->bDebugDrawSlots)
+		if (bAnchorMoved || bModeChanged)
 		{
-			DrawDebugSphere(World, GroupAnchor.GetLocation(), 20.0f, 8, DebugSlotColor, false, Squad->UpdateInterval * 1.1f);
+			LastAnchorLocation = PlayerNavLoc;
+			LastAnchorRotation = PlayerForward.Rotation();
+			bForceNextUpdate = false;
+			Squad->OnSquadMoveUpdated.Broadcast(MinionCount, PlayerNavLoc);
 		}
 
-		TArray<FVector, TInlineAllocator<16>> GroupSlots;
-		GroupSlots.SetNumUninitialized(GroupCount);
+		const bool bForceIssueMoves = bAnchorMoved || bModeChanged;
+		const int32 GroupCount = ReachableIndices.Num();
 
-		for (int32 SlotIdx = 0; SlotIdx < GroupCount; ++SlotIdx)
+		// Build Minion -> Slot assignment
+		TArray<int32, TInlineAllocator<16>> AssignedSlotForLocalIdx;
+		AssignedSlotForLocalIdx.Init(INDEX_NONE, GroupCount);
+
+		if (SolveResult.ActiveMode == EMinionFormationMode::SingleFileTrail)
 		{
-			const FVector IdealSlot = CalculateSlotAroundTransform(SlotIdx, GroupAnchor);
-			FNavLocation ProjectedLoc;
-			if (NavSys->ProjectPointToNavigation(IdealSlot, ProjectedLoc, NavProjectionExtent))
+			// Single-File Bridge Mode: sort by distance to player with a rank-stickiness bias
+			// so side-by-side minions entering a bridge lock into order without flip-flopping.
+			TArray<int32, TInlineAllocator<16>> SortedLocalOrder;
+			SortedLocalOrder.Reserve(GroupCount);
+			for (int32 LocalIdx = 0; LocalIdx < GroupCount; ++LocalIdx)
 			{
-				GroupSlots[SlotIdx] = ProjectedLoc.Location;
+				SortedLocalOrder.Add(LocalIdx);
 			}
-			else if (NavSys->ProjectPointToNavigation(GroupAnchor.GetLocation(), ProjectedLoc, NavProjectionExtent))
+
+			SortedLocalOrder.Sort([&](int32 A, int32 B)
 			{
-				GroupSlots[SlotIdx] = ProjectedLoc.Location;
+				AActor* ActorA = Squad->ActiveMinions[ReachableIndices[A]];
+				AActor* ActorB = Squad->ActiveMinions[ReachableIndices[B]];
+
+				float ScoreA = FVector::Dist2D(ActorA->GetActorLocation(), PlayerNavLoc);
+				float ScoreB = FVector::Dist2D(ActorB->GetActorLocation(), PlayerNavLoc);
+
+				if (const int32* PrevRankA = StickySlotAssignments.Find(ActorA))
+				{
+					ScoreA += static_cast<float>(*PrevRankA) * 25.0f;
+				}
+				if (const int32* PrevRankB = StickySlotAssignments.Find(ActorB))
+				{
+					ScoreB += static_cast<float>(*PrevRankB) * 25.0f;
+				}
+
+				return ScoreA < ScoreB;
+			});
+
+			for (int32 Rank = 0; Rank < GroupCount; ++Rank)
+			{
+				AssignedSlotForLocalIdx[SortedLocalOrder[Rank]] = Rank;
+			}
+		}
+		else
+		{
+			// Open / Corridor / Fan Mode: greedy closest assignment with stickiness bonus to prevent unnecessary crisscrossing
+			TArray<bool, TInlineAllocator<16>> bLocalUsed;
+			bLocalUsed.Init(false, GroupCount);
+			constexpr float StickinessBonusCm = 65.0f;
+
+			for (int32 SlotIdx = 0; SlotIdx < SolveResult.Slots.Num() && SlotIdx < GroupCount; ++SlotIdx)
+			{
+				const FVector& SlotLoc = SolveResult.Slots[SlotIdx];
+				int32 BestLocalIdx = INDEX_NONE;
+				float BestScoreDist = MAX_flt;
+
+				for (int32 LocalIdx = 0; LocalIdx < GroupCount; ++LocalIdx)
+				{
+					if (bLocalUsed[LocalIdx]) continue;
+
+					AActor* MinionActor = Squad->ActiveMinions[ReachableIndices[LocalIdx]];
+					float ScoreDist = FVector::Dist2D(MinionActor->GetActorLocation(), SlotLoc);
+
+					if (const int32* PrevSlot = StickySlotAssignments.Find(MinionActor))
+					{
+						if (*PrevSlot == SlotIdx)
+						{
+							ScoreDist -= StickinessBonusCm;
+						}
+					}
+
+					if (ScoreDist < BestScoreDist)
+					{
+						BestScoreDist = ScoreDist;
+						BestLocalIdx = LocalIdx;
+					}
+				}
+
+				if (BestLocalIdx != INDEX_NONE)
+				{
+					bLocalUsed[BestLocalIdx] = true;
+					AssignedSlotForLocalIdx[BestLocalIdx] = SlotIdx;
+				}
+			}
+		}
+
+		// Issue commands, speed scaling, corridor crowd weight, and tiered anti-stuck watchdog
+		const FVector CatchUpWarpTarget = FormationSolver.GetTailBreadcrumbOrFallback(PlayerNavLoc);
+
+		for (int32 LocalIdx = 0; LocalIdx < GroupCount; ++LocalIdx)
+		{
+			const int32 SlotIdx = AssignedSlotForLocalIdx[LocalIdx];
+			if (!SolveResult.Slots.IsValidIndex(SlotIdx)) continue;
+
+			const int32 SquadIdx = ReachableIndices[LocalIdx];
+			AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
+			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
+			if (!MinionActor || !MinionInterface) continue;
+
+			StickySlotAssignments.Add(MinionActor, SlotIdx);
+			MinionInterface->SetTightCorridorMode(SolveResult.bSuppressLateralEvade);
+
+			const EMinionState CurrentState = MinionInterface->GetMinionState();
+			if (CurrentState == EMinionState::TraversingNavLink)
+			{
+				ProgressTrackers.Remove(MinionActor);
+				continue;
+			}
+
+			const FVector MinionLoc = MinionActor->GetActorLocation();
+			const FVector& SlotLocation = SolveResult.Slots[SlotIdx];
+
+			// Suppress lateral evade on narrow bridges so player can smoothly pass back through their own line
+			const float VerticalDist = FMath::Abs(MinionLoc.Z - PlayerLocation.Z);
+			if (!SolveResult.bSuppressLateralEvade &&
+				VerticalDist < 120.0f &&
+				FVector::DistSquared2D(MinionLoc, PlayerLocation) < EvadeRadiusSq)
+			{
+				MinionInterface->EvadePlayer(PlayerLocation, PlayerVelocity, PlayerRight);
+				ProgressTrackers.Remove(MinionActor);
+				continue;
+			}
+
+			const float DistToSlot = FVector::Dist2D(MinionLoc, SlotLocation);
+			MinionInterface->UpdateFollowSpeedForDistance(DistToSlot, PlayerSpeed2D);
+
+			// --- Tiered Anti-Stuck Watchdog (Piggybacked on UpdateInterval, zero Tick) ---
+			if (CurrentState == EMinionState::Following && DistToSlot > 120.0f)
+			{
+				FMinionProgressTracker& Tracker = ProgressTrackers.FindOrAdd(MinionActor);
+				if (Tracker.LastCheckLocation.IsZero())
+				{
+					Tracker.LastCheckLocation = MinionLoc;
+				}
+				else
+				{
+					const float MovedSq = FVector::DistSquared2D(MinionLoc, Tracker.LastCheckLocation);
+					if (MovedSq < FMath::Square(18.0f))
+					{
+						Tracker.StuckSeconds += Squad->UpdateInterval;
+
+						if (Tracker.StuckSeconds >= 4.0f &&
+							(!MinionActor->WasRecentlyRendered(0.5f) || FVector::DistSquared2D(MinionLoc, PlayerNavLoc) > FMath::Square(1800.0f)))
+						{
+							MinionInterface->ExecuteUnstuckRecovery(3, CatchUpWarpTarget);
+							Tracker.StuckSeconds = 0.0f;
+							Tracker.LastTriggeredTier = 0;
+							Tracker.LastCheckLocation = CatchUpWarpTarget;
+							continue;
+						}
+						else if (Tracker.StuckSeconds >= 2.4f && Tracker.LastTriggeredTier < 2)
+						{
+							Tracker.LastTriggeredTier = 2;
+							MinionInterface->ExecuteUnstuckRecovery(2, SlotLocation);
+							continue;
+						}
+						else if (Tracker.StuckSeconds >= 1.2f && Tracker.LastTriggeredTier < 1)
+						{
+							Tracker.LastTriggeredTier = 1;
+							MinionInterface->ExecuteUnstuckRecovery(1, PlayerNavLoc);
+							continue;
+						}
+					}
+					else
+					{
+						Tracker.LastCheckLocation = MinionLoc;
+						Tracker.StuckSeconds = 0.0f;
+						Tracker.LastTriggeredTier = 0;
+					}
+				}
 			}
 			else
 			{
-				GroupSlots[SlotIdx] = IdealSlot;
-			}
-		}
-
-		TArray<bool, TInlineAllocator<16>> bUsed;
-		bUsed.Init(false, GroupCount);
-
-		for (int32 SlotIdx = 0; SlotIdx < GroupCount; ++SlotIdx)
-		{
-			const FVector& SlotLocation = GroupSlots[SlotIdx];
-			int32 BestLocalIdx = INDEX_NONE;
-			float BestDistSq = MAX_flt;
-
-			for (int32 LocalIdx = 0; LocalIdx < GroupCount; ++LocalIdx)
-			{
-				if (bUsed[LocalIdx]) continue;
-				const int32 SquadIdx = GroupIndices[LocalIdx];
-				const float DistSq = FVector::DistSquared2D(Squad->ActiveMinions[SquadIdx]->GetActorLocation(), SlotLocation);
-				if (DistSq < BestDistSq)
-				{
-					BestDistSq = DistSq;
-					BestLocalIdx = LocalIdx;
-				}
-			}
-
-			if (BestLocalIdx == INDEX_NONE) continue;
-			bUsed[BestLocalIdx] = true;
-
-			const int32 SquadIdx = GroupIndices[BestLocalIdx];
-			AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
-			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
-			if (!MinionInterface) continue;
-
-			const EMinionState CurrentState = MinionInterface->GetMinionState();
-			if (CurrentState == EMinionState::TraversingNavLink) continue;
-
-			const float VerticalDist = FMath::Abs(MinionActor->GetActorLocation().Z - PlayerLocation.Z);
-			if (VerticalDist < 120.0f && FVector::DistSquared2D(MinionActor->GetActorLocation(), PlayerLocation) < EvadeRadiusSq)
-			{
-				MinionInterface->EvadePlayer(PlayerLocation, PlayerVelocity, PlayerRight);
-				continue;
+				ProgressTrackers.Remove(MinionActor);
 			}
 
 			if (Squad->bDebugDrawSlots)
 			{
-				DrawDebugSphere(World, SlotLocation, 14.0f, 8, DebugSlotColor, false, Squad->UpdateInterval * 1.1f);
-				DrawDebugLine(World, MinionActor->GetActorLocation(), SlotLocation, FColor::Cyan, false, Squad->UpdateInterval * 1.1f, 0, 1.5f);
+				const FColor SlotColor = (SolveResult.ActiveMode == EMinionFormationMode::SingleFileTrail)
+					? FColor::Yellow
+					: ((SolveResult.ActiveMode == EMinionFormationMode::AdaptiveFan) ? FColor::Magenta : FColor::Green);
+				DrawDebugSphere(World, SlotLocation, 14.0f, 8, SlotColor, false, Squad->UpdateInterval * 1.1f);
+				DrawDebugLine(World, MinionLoc, SlotLocation, FColor::Cyan, false, Squad->UpdateInterval * 1.1f, 0, 1.5f);
 			}
 
-			const float DistToSlotSq = FVector::DistSquared2D(MinionActor->GetActorLocation(), SlotLocation);
-			if (bForceGroupMove || CurrentState == EMinionState::Idle || DistToSlotSq > FMath::Square(35.0f))
+			if (bForceIssueMoves || DistToSlot > 48.0f)
 			{
 				MinionInterface->MoveToSquadSlot(SlotLocation);
 			}
 		}
-	};
 
-	// 2. Command reachable minions (including the 1 carried minion after landing) to follow the live Player anchor
-	AssignGroupToAnchor(ReachableIndices, LivePlayerAnchor, FColor::Green, bAnchorMoved);
+		// Debug Overlay: Breadcrumb Spine, Topology Probes, and Active Mode readout
+		if (Squad->bDebugDrawSlots)
+		{
+			const float DebugDuration = Squad->UpdateInterval * 1.1f;
+			const TArray<FVector>& Trail = FormationSolver.GetBreadcrumbs();
+			for (int32 b = 0; b < Trail.Num() - 1; ++b)
+			{
+				DrawDebugLine(World, Trail[b] + FVector(0, 0, 15.0f), Trail[b + 1] + FVector(0, 0, 15.0f), FColor::Purple, false, DebugDuration, 0, 2.5f);
+			}
+			if (!Trail.IsEmpty())
+			{
+				DrawDebugLine(World, Trail.Last() + FVector(0, 0, 15.0f), PlayerNavLoc + FVector(0, 0, 15.0f), FColor::Purple, false, DebugDuration, 0, 2.5f);
+			}
 
-	// 3. Command stranded minions to stay grouped around the takeoff WaitingGroupAnchorTransform
-	AssignGroupToAnchor(StrandedAtTakeoffIndices, WaitingGroupAnchorTransform, FColor::Blue, false);
-	
-	// 4. Keep detached minions with no path to the player waiting neatly around their interactable object
+			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f), SolveResult.DebugLeftHit + FVector(0, 0, 25.0f), FColor::Orange, false, DebugDuration, 0, 2.0f);
+			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f), SolveResult.DebugRightHit + FVector(0, 0, 25.0f), FColor::Orange, false, DebugDuration, 0, 2.0f);
+			DrawDebugLine(World, SolveResult.DebugProbeOrigin + FVector(0, 0, 25.0f), SolveResult.DebugBackHit + FVector(0, 0, 25.0f), FColor::Red, false, DebugDuration, 0, 2.0f);
+
+			const TCHAR* ModeLabel = TEXT("CRESCENT");
+			switch (SolveResult.ActiveMode)
+			{
+			case EMinionFormationMode::DoubleFile:      ModeLabel = TEXT("DOUBLE-FILE"); break;
+			case EMinionFormationMode::SingleFileTrail: ModeLabel = TEXT("SINGLE-FILE TRAIL"); break;
+			case EMinionFormationMode::AdaptiveFan:     ModeLabel = TEXT("ADAPTIVE FAN"); break;
+			default: break;
+			}
+
+			DrawDebugString(
+				World,
+				PlayerLocation + FVector(0.0f, 0.0f, 125.0f),
+				FString::Printf(TEXT("Mode: %s | Width: %.0fcm | Back: %.0fcm"), ModeLabel, SolveResult.EffectiveCorridorWidth, SolveResult.BackClearance),
+				nullptr,
+				FColor::White,
+				DebugDuration,
+				true,
+				1.0f);
+		}
+	}
+
+	// 4. Stranded Takeoff Group (with Closed-Gate Guard so minions don't sprint endlessly into a shut door)
+	if (!StrandedAtTakeoffIndices.IsEmpty())
+	{
+		FVector StrandedAnchorLoc = WaitingGroupAnchorTransform.GetLocation();
+		AActor* FirstStranded = Squad->ActiveMinions[StrandedAtTakeoffIndices[0]];
+
+		// If the waiting anchor is on the player's side of a closed gate, fall back to the stranded group's own centroid
+		if (!bHasValidWaitingAnchor || !Squad->CanMinionReachNavLocation(FirstStranded, NavSys, StrandedAnchorLoc))
+		{
+			FVector Centroid = FVector::ZeroVector;
+			for (int32 SquadIdx : StrandedAtTakeoffIndices)
+			{
+				Centroid += Squad->ActiveMinions[SquadIdx]->GetActorLocation();
+			}
+			Centroid /= static_cast<float>(StrandedAtTakeoffIndices.Num());
+
+			FNavLocation ProjectedCentroid;
+			if (NavSys->ProjectPointToNavigation(Centroid, ProjectedCentroid, FVector(150.0f, 150.0f, 250.0f), NavData))
+			{
+				StrandedAnchorLoc = ProjectedCentroid.Location;
+			}
+			else
+			{
+				StrandedAnchorLoc = FirstStranded->GetActorLocation();
+			}
+		}
+
+		const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(*NavData, PlayerActor, nullptr);
+		const int32 StrandedCount = StrandedAtTakeoffIndices.Num();
+		const FTransform StrandedTransform(WaitingGroupAnchorTransform.GetRotation(), StrandedAnchorLoc);
+
+		for (int32 LocalIdx = 0; LocalIdx < StrandedCount; ++LocalIdx)
+		{
+			const int32 SquadIdx = StrandedAtTakeoffIndices[LocalIdx];
+			AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
+			IMinionAgentInterface* MinionInterface = Squad->ActiveMinionInterfaces[SquadIdx].GetInterface();
+			if (!MinionActor || !MinionInterface) continue;
+
+			if (MinionInterface->GetMinionState() == EMinionState::TraversingNavLink) continue;
+
+			const FVector IdealSlot = CalculateSlotAroundTransform(LocalIdx, StrandedTransform);
+			bool bHitEdge = false;
+			float ClearDist = 0.0f;
+			const FVector SafeSlot = FMinionFormationSolver::ClampPointOnNavMesh(
+				NavSys, NavData, Filter, MinionActor, StrandedAnchorLoc, IdealSlot, 40.0f, bHitEdge, ClearDist);
+
+			if (Squad->bDebugDrawSlots)
+			{
+				DrawDebugSphere(World, SafeSlot, 14.0f, 8, FColor::Blue, false, Squad->UpdateInterval * 1.1f);
+			}
+
+			if (FVector::DistSquared2D(MinionActor->GetActorLocation(), SafeSlot) > FMath::Square(45.0f))
+			{
+				MinionInterface->MoveToSquadSlot(SafeSlot);
+			}
+		}
+	}
+
+	// 5. Detached minions with no path to the player stay grouped around their interactable anchor
 	for (int32 SquadIdx : StrandedAtInteractableIndices)
 	{
 		AActor* MinionActor = Squad->ActiveMinions[SquadIdx];
@@ -1834,6 +2132,11 @@ bool UMinionSquadComponent::CanMinionReachNavLocation(
 	UNavigationSystemV1* NavSys,
 	const FVector& TargetNavLoc) const
 {
+	if (!IsValid(MinionActor) || !NavSys)
+	{
+		return false;
+	}
+
 	if (const IMinionAgentInterface* MinionInterface = Cast<IMinionAgentInterface>(MinionActor))
 	{
 		const EMinionState State = MinionInterface->GetMinionState();
@@ -1845,22 +2148,13 @@ bool UMinionSquadComponent::CanMinionReachNavLocation(
 		{
 			return true;
 		}
-	}	
-	
-	if (!IsValid(MinionActor) || !NavSys) return false;
-
-	// If the minion is already actively attached to the Whip or Carry palanquin right next to the player, count it as reachable
-	if (const IMinionAgentInterface* MinionInterface = Cast<IMinionAgentInterface>(MinionActor))
-	{
-		const EMinionState State = MinionInterface->GetMinionState();
-		if (State == EMinionState::InAttackWhip || State == EMinionState::InCarryRush)
-		{
-			return true;
-		}
 	}
 
 	ANavigationData* NavData = NavSys->GetDefaultNavDataInstance();
-	if (!NavData) return false;
+	if (!NavData)
+	{
+		return false;
+	}
 
 	FNavLocation ProjectedMinionNav;
 	const FVector MinionExtent(150.0f, 150.0f, 300.0f);
@@ -1869,8 +2163,16 @@ bool UMinionSquadComponent::CanMinionReachNavLocation(
 		return false;
 	}
 
-	// Synchronous complete-path check (Partial Paths strictly disabled!)
-	FSharedConstNavQueryFilter QueryFilter = UNavigationQueryFilter::GetQueryFilter(*NavData, MinionActor, nullptr);
+	const FSharedConstNavQueryFilter QueryFilter = UNavigationQueryFilter::GetQueryFilter(*NavData, MinionActor, nullptr);
+
+	// Fast-path: unobstructed straight-line NavMesh raycast guarantees same-island reachability—skip A* completely!
+	FVector RayHitLoc;
+	if (!NavData->Raycast(ProjectedMinionNav.Location, TargetNavLoc, RayHitLoc, QueryFilter, MinionActor))
+	{
+		return true;
+	}
+
+	// Full A* check around corners and Smart NavLinks (Partial Paths strictly disabled)
 	FPathFindingQuery PathQuery(MinionActor, *NavData, ProjectedMinionNav.Location, TargetNavLoc, QueryFilter);
 	PathQuery.SetAllowPartialPaths(false);
 
@@ -2350,13 +2652,7 @@ AActor* UMinionSquadComponent::FindBestThrowableMinion(const FVector& ReferenceO
 		}
 
 		IMinionAgentInterface* MinionInterface = ActiveMinionInterfaces[i].GetInterface();
-		if (!MinionInterface)
-		{
-			continue;
-		}
-
-		const EMinionState State = MinionInterface->GetMinionState();
-		if (State != EMinionState::Idle && State != EMinionState::Following)
+		if (!MinionInterface || !MinionInterface->CanBeThrown())
 		{
 			continue;
 		}
@@ -2367,8 +2663,6 @@ AActor* UMinionSquadComponent::FindBestThrowableMinion(const FVector& ReferenceO
 			continue;
 		}
 
-		// When player is grounded, require reachability (unless minion is right beside them);
-		// when player is mid-air, allow grabbing any nearby Idle/Following minion for responsive jump-throws.
 		if (bPlayerGrounded && DistSq > CloseGrabBypassSq && !CanMinionReachNavLocation(Candidate, NavSys, PlayerNavLoc))
 		{
 			continue;
@@ -2572,6 +2866,12 @@ void UMinionSquadComponent::OnPlayerAvoidanceOverlap(
 	const FHitResult& SweepResult)
 {
 	if (CurrentStance != EMinionSquadStance::Follow) return;
+
+	// Do not trigger lateral side-steps on narrow bridges or moving platforms
+	if (FollowStanceInstance && FollowStanceInstance->IsLateralEvadeSuppressed())
+	{
+		return;
+	}
 
 	AActor* PlayerActor = GetOwner();
 	if (!PlayerActor || !IsValid(OtherActor) || OtherActor == PlayerActor) return;

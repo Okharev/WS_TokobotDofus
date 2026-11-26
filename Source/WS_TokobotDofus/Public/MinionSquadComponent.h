@@ -7,7 +7,9 @@
 #include "RushClashInterface.h"
 #include "UObject/ScriptInterface.h"
 #include "CombatFeedbackTypes.h"
+#include "MinionFormationSolver.h"
 #include "MinionSquadComponent.generated.h"
+
 
 class USphereComponent;
 class UPhysicsConstraintComponent;
@@ -15,6 +17,15 @@ class UDamageType;
 class IMinionAgentInterface;
 class UMinionSquadComponent;
 class UNavigationSystemV1;
+
+
+struct FMinionProgressTracker
+{
+	FVector LastCheckLocation = FVector::ZeroVector;
+	float StuckSeconds = 0.0f;
+	int32 LastTriggeredTier = 0;
+};
+
 
 /**
  * High-level Stance modes for the Minion Squad.
@@ -272,6 +283,8 @@ public:
 	virtual void OnExitStance() override;
 	virtual void OnSquadRosterChanged() override;
 	virtual bool RequiresComponentTick() const override { return false; }
+	
+	bool IsLateralEvadeSuppressed() const { return bSuppressingLateralEvade; }
 
 	void ForceImmediateEvaluation();
 
@@ -279,6 +292,14 @@ private:
 	void EvaluateFormationAndAvoidance();
 	FVector CalculateSlotAroundTransform(int32 SlotIndex, const FTransform& AnchorTransform) const;
 
+	FMinionFormationSolver FormationSolver;
+	TMap<TWeakObjectPtr<AActor>, int32> StickySlotAssignments;
+	TMap<TWeakObjectPtr<AActor>, FMinionProgressTracker> ProgressTrackers;
+	FVector LastGroundedPlayerNavLoc = FVector::ZeroVector;
+	EMinionFormationMode LastFormationMode = EMinionFormationMode::Crescent;
+	bool bSuppressingLateralEvade = false;
+	bool bHasValidWaitingAnchor = false;
+	
 	/** Locked at the takeoff spot so left-behind minions stay grouped even when 1 carried minion is with the player on a ledge. */
 	FTransform WaitingGroupAnchorTransform = FTransform::Identity;
 
@@ -484,6 +505,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnCarryJumpTriggeredSignature OnCarryJumpTriggered;
 	// ~End Blueprint Event Dispatchers
+	
+	/** Topology-aware formation tuning (thin bridges, corridors, walls, ledges, breadcrumbs). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Formation")
+	FMinionFormationConfig FormationConfig;
 
 	// ~Begin Squad & Stance Blueprint API
 	UFUNCTION(BlueprintCallable, Category = "PikminSquad")

@@ -12,12 +12,10 @@ AMinionAIController::AMinionAIController(const FObjectInitializer& ObjectInitial
 
 void AMinionAIController::OnPossess(APawn* InPawn)
 {
-	// Ensure the pawn's NavAgent radius/height are valid BEFORE Super::OnPossess registers with UCrowdManager
 	if (ACharacter* PossessedChar = Cast<ACharacter>(InPawn))
 	{
 		if (UCharacterMovementComponent* MoveComp = PossessedChar->GetCharacterMovement())
 		{
-			
 			MoveComp->SetUpdateNavAgentWithOwnersCollisions(true);
 			MoveComp->UpdateNavAgent(*PossessedChar);
 		}
@@ -25,32 +23,64 @@ void AMinionAIController::OnPossess(APawn* InPawn)
 
 	Super::OnPossess(InPawn);
 
-	
-	
 	if (!CrowdFollowingComponent)
 	{
 		CrowdFollowingComponent = Cast<UCrowdFollowingComponent>(GetPathFollowingComponent());
 	}
 
+	bCrowdSteeringWanted = true;
+	bIsTightCorridorMode = false;
+
 	if (CrowdFollowingComponent)
 	{
-		CrowdFollowingComponent->SetCrowdSimulationState(ECrowdSimulationState::Enabled);
 		CrowdFollowingComponent->SetCrowdSeparation(true);
-		// Gentle 2.0f separation so inner formation slots never repel approaching minions
-		CrowdFollowingComponent->SetCrowdSeparationWeight(2.0f);
+		CrowdFollowingComponent->SetCrowdSeparationWeight(NormalCrowdSeparationWeight);
 		CrowdFollowingComponent->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::High);
 		CrowdFollowingComponent->SetCrowdAnticipateTurns(true);
 		CrowdFollowingComponent->SetCrowdObstacleAvoidance(true);
 		CrowdFollowingComponent->SetCrowdAvoidanceRangeMultiplier(1.0f);
-		CrowdFollowingComponent->UpdateCrowdAgentParams();
+		RefreshEffectiveCrowdState();
 	}
 }
 
 void AMinionAIController::SetCrowdSteeringEnabled(bool bEnabled)
 {
-	if (CrowdFollowingComponent)
+	if (bCrowdSteeringWanted != bEnabled)
 	{
-		CrowdFollowingComponent->SetCrowdSimulationState(
-			bEnabled ? ECrowdSimulationState::Enabled : ECrowdSimulationState::Disabled);
+		bCrowdSteeringWanted = bEnabled;
+		RefreshEffectiveCrowdState();
+	}
+}
+
+void AMinionAIController::SetTightCorridorMode(bool bTight)
+{
+	if (bIsTightCorridorMode != bTight)
+	{
+		bIsTightCorridorMode = bTight;
+		RefreshEffectiveCrowdState();
+	}
+}
+
+void AMinionAIController::RefreshEffectiveCrowdState()
+{
+	if (!CrowdFollowingComponent)
+	{
+		return;
+	}
+
+	// Only run Detour Crowd when explicitly wanted AND NOT on a narrow bridge/corridor.
+	// When Disabled, UCrowdFollowingComponent falls back cleanly to standard UPathFollowingComponent.
+	const bool bEnableCrowd = bCrowdSteeringWanted && !bIsTightCorridorMode;
+
+	CrowdFollowingComponent->SetCrowdSimulationState(
+		bEnableCrowd ? ECrowdSimulationState::Enabled : ECrowdSimulationState::Disabled);
+
+	if (bEnableCrowd)
+	{
+		CrowdFollowingComponent->SetCrowdSeparation(true);
+		CrowdFollowingComponent->SetCrowdObstacleAvoidance(true);
+		CrowdFollowingComponent->SetCrowdSeparationWeight(NormalCrowdSeparationWeight);
+		CrowdFollowingComponent->SetCrowdAvoidanceRangeMultiplier(1.0f);
+		CrowdFollowingComponent->UpdateCrowdAgentParams();
 	}
 }
