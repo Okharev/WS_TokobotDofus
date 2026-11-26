@@ -32,7 +32,8 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	// --- Events ---
 	UPROPERTY(BlueprintAssignable, Category = "MinionThrow|Events")
@@ -55,18 +56,22 @@ public:
 
 protected:
 	// --- Cone & Scoring Tuning ---
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting", meta = (ClampMin = "0.02", ClampMax = "0.25", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting",
+		meta = (ClampMin = "0.02", ClampMax = "0.25", Units = "s"))
 	float EvaluationInterval = 0.05f;
 
 	/** Half-angle of the camera aim cone (degrees). 32-40 feels effortless like The Pathless / Sekiro. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting", meta = (ClampMin = "5.0", ClampMax = "75.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting",
+		meta = (ClampMin = "5.0", ClampMax = "75.0"))
 	float AimConeHalfAngleDegrees = 35.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting", meta = (ClampMin = "150.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting",
+		meta = (ClampMin = "150.0", Units = "cm"))
 	float MaxGlobalThrowRange = 2000.0f;
 
 	/** Sticky score bonus given to the currently locked target to eliminate reticle flicker. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting", meta = (ClampMin = "0.0", ClampMax = "0.5"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting",
+		meta = (ClampMin = "0.0", ClampMax = "0.5"))
 	float LockHysteresisBonus = 0.12f;
 
 	/** If true, Z-Targeting an enemy strongly biases minion throws onto that enemy's throw target. */
@@ -74,10 +79,12 @@ protected:
 	bool bPrioritizeCombatLockTarget = true;
 
 	/** Allows throwing minions at a Z-Targeted enemy even if they sit near the edge of a fixed camera view. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy", meta = (EditCondition = "bPrioritizeCombatLockTarget"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy",
+		meta = (EditCondition = "bPrioritizeCombatLockTarget"))
 	bool bAllowLockedTargetOutsideCone = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy", meta = (EditCondition = "bPrioritizeCombatLockTarget", ClampMin = "0.5"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|LockOnSynergy",
+		meta = (EditCondition = "bPrioritizeCombatLockTarget", ClampMin = "0.5"))
 	float CombatLockScoreBonus = 2.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Targeting")
@@ -87,7 +94,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Trajectory", meta = (ClampMin = "300.0"))
 	float ThrowFlightSpeed = 2400.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Trajectory", meta = (ClampMin = "0.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Trajectory",
+		meta = (ClampMin = "0.0", Units = "cm"))
 	float ThrowArcHeight = 140.0f;
 
 	/** Local offset on the player where the throw arc starts (and preview originates). */
@@ -95,7 +103,8 @@ protected:
 	FVector PlayerLaunchLocalOffset = FVector(45.0f, 25.0f, 35.0f);
 
 	/** Max distance from player to grab an Idle/Following minion for throwing. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Trajectory", meta = (ClampMin = "150.0", Units = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Trajectory",
+		meta = (ClampMin = "150.0", Units = "cm"))
 	float MaxMinionGrabRadius = 1100.0f;
 
 	// --- Debug Visuals ---
@@ -105,7 +114,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Debug")
 	bool bDebugDrawThrowArc = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Debug", meta = (ClampMin = "6", ClampMax = "40"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MinionThrow|Debug",
+		meta = (ClampMin = "6", ClampMax = "40"))
 	int32 DebugArcSegments = 18;
 
 private:

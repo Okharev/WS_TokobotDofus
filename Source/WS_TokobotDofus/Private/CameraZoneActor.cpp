@@ -84,8 +84,8 @@ void ACameraZoneActor::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 		PreviousDesiredTargetLoc = DesiredTargetLoc;
 		CurrentTargetLoc = DesiredTargetLoc;
 		CurrentLookRotation = LookAt.bSnapAimOnEnter
-			? (CurrentTargetLoc - OutResult.Location).GetSafeNormal().Rotation()
-			: OutResult.Rotation;
+			                      ? (CurrentTargetLoc - OutResult.Location).GetSafeNormal().Rotation()
+			                      : OutResult.Rotation;
 		bHasInitializedLook = true;
 	}
 
@@ -111,7 +111,8 @@ void ACameraZoneActor::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 			}
 			else
 			{
-				CurrentTargetLoc = FMath::VInterpTo(CurrentTargetLoc, DesiredTargetLoc, DeltaTime, LookAt.TargetLagSpeed);
+				CurrentTargetLoc = FMath::VInterpTo(CurrentTargetLoc, DesiredTargetLoc, DeltaTime,
+				                                    LookAt.TargetLagSpeed);
 			}
 
 			if (LookAt.TargetLagMaxDistance > 0.f)
@@ -142,12 +143,14 @@ void ACameraZoneActor::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 				{
 					const float Step = FMath::Min(LookAt.LagMaxTimeStep, RemainingTime);
 					RemainingTime -= Step;
-					CurrentLookRotation = FMath::RInterpTo(CurrentLookRotation, DesiredRot, Step, LookAt.RotationLagSpeed);
+					CurrentLookRotation = FMath::RInterpTo(CurrentLookRotation, DesiredRot, Step,
+					                                       LookAt.RotationLagSpeed);
 				}
 			}
 			else
 			{
-				CurrentLookRotation = FMath::RInterpTo(CurrentLookRotation, DesiredRot, DeltaTime, LookAt.RotationLagSpeed);
+				CurrentLookRotation = FMath::RInterpTo(CurrentLookRotation, DesiredRot, DeltaTime,
+				                                       LookAt.RotationLagSpeed);
 			}
 		}
 		else
@@ -160,10 +163,14 @@ void ACameraZoneActor::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 }
 
 void ACameraZoneActor::OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+                                             UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
+                                             const FHitResult& SweepResult)
 {
 	APawn* Pawn = Cast<APawn>(OtherActor);
-	if (!Pawn || !Pawn->IsLocallyControlled()) return;
+	if (!Pawn || !Pawn->IsLocallyControlled())
+	{
+		return;
+	}
 
 	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
 	{
@@ -175,10 +182,13 @@ void ACameraZoneActor::OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComp
 }
 
 void ACameraZoneActor::OnTriggerEndOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+                                           UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
 	APawn* Pawn = Cast<APawn>(OtherActor);
-	if (!Pawn || !Pawn->IsLocallyControlled()) return;
+	if (!Pawn || !Pawn->IsLocallyControlled())
+	{
+		return;
+	}
 
 	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
 	{

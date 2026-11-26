@@ -155,7 +155,8 @@ FTransform UMinionThrowTargetComponent::GetSlotWorldTransform(int32 SlotIndex) c
 	else if (MaxMinionSlots > 1 && AutoSlotRingRadius > KINDA_SMALL_NUMBER)
 	{
 		const float AngleRad = (2.0f * PI * static_cast<float>(SlotIndex)) / static_cast<float>(MaxMinionSlots);
-		LocalOffset = FVector(FMath::Cos(AngleRad) * AutoSlotRingRadius, FMath::Sin(AngleRad) * AutoSlotRingRadius, 0.0f);
+		LocalOffset = FVector(FMath::Cos(AngleRad) * AutoSlotRingRadius, FMath::Sin(AngleRad) * AutoSlotRingRadius,
+		                      0.0f);
 	}
 
 	const FTransform CompWorld = GetComponentTransform();
@@ -276,8 +277,8 @@ void UMinionThrowTargetComponent::NotifyMinionArrived(
 			Payload.MaxHearts = Response.MaxHearts;
 			Payload.bIsKillingBlow = Response.bWasKillingBlow;
 			Payload.AppliedHitStopDuration = Response.bWasKillingBlow
-				? ThrowHitFeedback.KillHitStopDuration
-				: ThrowHitFeedback.HitStopDuration;
+				                                 ? ThrowHitFeedback.KillHitStopDuration
+				                                 : ThrowHitFeedback.HitStopDuration;
 
 			bTargetKilled = Response.bWasKillingBlow;
 
@@ -321,7 +322,8 @@ void UMinionThrowTargetComponent::NotifyMinionArrived(
 	{
 		FTimerDelegate ExpireDelegate;
 		ExpireDelegate.BindUObject(this, &UMinionThrowTargetComponent::HandleTimedLatchExpired, SlotIndex);
-		World->GetTimerManager().SetTimer(SlotEntries[SlotIndex].TimedLatchHandle, ExpireDelegate, TimedLatchDuration, false);
+		World->GetTimerManager().SetTimer(SlotEntries[SlotIndex].TimedLatchHandle, ExpireDelegate, TimedLatchDuration,
+		                                  false);
 	}
 
 	OnMinionLatched.Broadcast(MinionActor, GetLatchedMinionCount(), MaxMinionSlots);

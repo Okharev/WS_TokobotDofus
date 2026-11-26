@@ -16,7 +16,10 @@ UCameraDirectorComponent::UCameraDirectorComponent()
 
 void UCameraDirectorComponent::PushZone(ACameraZoneActor* Zone)
 {
-	if (!Zone) return;
+	if (!Zone)
+	{
+		return;
+	}
 
 	// Move to top of recency order if re-entered
 	ZoneStack.Remove(Zone);
@@ -27,7 +30,10 @@ void UCameraDirectorComponent::PushZone(ACameraZoneActor* Zone)
 
 void UCameraDirectorComponent::PopZone(ACameraZoneActor* Zone)
 {
-	if (!Zone) return;
+	if (!Zone)
+	{
+		return;
+	}
 
 	ZoneStack.Remove(Zone);
 	EvaluateStack(Zone);
@@ -70,7 +76,10 @@ ACameraZoneActor* UCameraDirectorComponent::GetTopPriorityZone()
 void UCameraDirectorComponent::EvaluateStack(const ACameraZoneActor* ExitingZone)
 {
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
-	if (!PC) return;
+	if (!PC)
+	{
+		return;
+	}
 
 	ACameraZoneActor* NextZone = GetTopPriorityZone();
 	if (NextZone == CurrentActiveZone.Get())
@@ -244,15 +253,15 @@ void UCameraDirectorComponent::UpdateFreeCameraLockOn(float DeltaTime, APlayerCo
 	const FVector FocusPoint = FMath::Lerp(PlayerLoc, TargetLoc, LockCameraFocusWeight);
 
 	const FVector CamLoc = PC->PlayerCameraManager
-		? PC->PlayerCameraManager->GetCameraLocation()
-		: PlayerLoc;
+		                       ? PC->PlayerCameraManager->GetCameraLocation()
+		                       : PlayerLoc;
 
 	// Compute yaw from Player->Target so close-range dueling stays rock-solid, pitch from Cam->FocusPoint
 	const FVector PlayerToTarget2D = (TargetLoc - PlayerLoc).GetSafeNormal2D();
 	const FRotator CurrentControlRot = PC->GetControlRotation();
 	const float DesiredYaw = PlayerToTarget2D.IsNearlyZero()
-		? CurrentControlRot.Yaw
-		: PlayerToTarget2D.Rotation().Yaw;
+		                         ? CurrentControlRot.Yaw
+		                         : PlayerToTarget2D.Rotation().Yaw;
 
 	const FVector CamToFocus = (FocusPoint - CamLoc).GetSafeNormal();
 	float DesiredPitch = CamToFocus.IsNearlyZero() ? LockPitchMax : CamToFocus.Rotation().Pitch;
@@ -385,7 +394,8 @@ FVector UCameraDirectorComponent::GetWorldMoveDirection(FVector2D MoveInput)
 	{
 		if (const APawn* Pawn = PC->GetPawn())
 		{
-			const FVector ToTarget = (ActiveLockTarget->GetLockWorldLocation() - Pawn->GetActorLocation()).GetSafeNormal2D();
+			const FVector ToTarget = (ActiveLockTarget->GetLockWorldLocation() - Pawn->GetActorLocation()).
+				GetSafeNormal2D();
 			if (!ToTarget.IsNearlyZero())
 			{
 				ActiveForward = ToTarget;

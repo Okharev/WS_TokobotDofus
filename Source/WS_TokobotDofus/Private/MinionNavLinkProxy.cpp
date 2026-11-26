@@ -18,7 +18,7 @@ AMinionNavLinkProxy::AMinionNavLinkProxy()
 	{
 		SmartComp->SetEnabled(true);
 		SmartComp->SetLinkData(LinkStartPoint, LinkEndPoint, LinkDirection);
-		SmartComp->SetBroadcastData(TriggerRadius, ECollisionChannel::ECC_Pawn, 0.2f);
+		SmartComp->SetBroadcastData(TriggerRadius, ECC_Pawn, 0.2f);
 	}
 }
 
@@ -31,7 +31,7 @@ void AMinionNavLinkProxy::OnConstruction(const FTransform& Transform)
 	{
 		SmartComp->SetEnabled(true);
 		SmartComp->SetLinkData(LinkStartPoint, LinkEndPoint, LinkDirection);
-		SmartComp->SetBroadcastData(TriggerRadius, ECollisionChannel::ECC_Pawn, 0.2f);
+		SmartComp->SetBroadcastData(TriggerRadius, ECC_Pawn, 0.2f);
 	}
 
 	Super::OnConstruction(Transform);
@@ -95,7 +95,8 @@ void AMinionNavLinkProxy::HandleSmartLinkReached(AActor* MovingActor, const FVec
 			{
 				if (const ANavigationData* NavData = NavSys->GetDefaultNavDataInstance())
 				{
-					const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(*NavData, MovingActor, nullptr);
+					const FSharedConstNavQueryFilter Filter = UNavigationQueryFilter::GetQueryFilter(
+						*NavData, MovingActor, nullptr);
 					bool bHitEdge = false;
 					float ClearDist = 0.0f;
 					TargetLandingPoint = FMinionFormationSolver::ClampPointOnNavMesh(

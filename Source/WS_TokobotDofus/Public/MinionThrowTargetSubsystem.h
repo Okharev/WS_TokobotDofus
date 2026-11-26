@@ -19,7 +19,10 @@ public:
 	void RegisterTarget(UMinionThrowTargetComponent* TargetComp);
 	void UnregisterTarget(UMinionThrowTargetComponent* TargetComp);
 
-	const TArray<TWeakObjectPtr<UMinionThrowTargetComponent>>& GetRegisteredTargets() const { return RegisteredTargets; }
+	const TArray<TWeakObjectPtr<UMinionThrowTargetComponent>>& GetRegisteredTargets() const
+	{
+		return RegisteredTargets;
+	}
 
 private:
 	TArray<TWeakObjectPtr<UMinionThrowTargetComponent>> RegisteredTargets;

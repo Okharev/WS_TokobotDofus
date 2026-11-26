@@ -33,9 +33,9 @@ struct FMinionProgressTracker
 UENUM(BlueprintType)
 enum class EMinionSquadStance : uint8
 {
-	Follow      UMETA(DisplayName = "Follow Formation (NavMesh)"),
-	AttackWhip  UMETA(DisplayName = "Attack Stance (Damped Stiff Chain)"),
-	CarryRush   UMETA(DisplayName = "Carry Stance (Transport & Rush)")
+	Follow UMETA(DisplayName = "Follow Formation (NavMesh)"),
+	AttackWhip UMETA(DisplayName = "Attack Stance (Damped Stiff Chain)"),
+	CarryRush UMETA(DisplayName = "Carry Stance (Transport & Rush)")
 };
 
 /**
@@ -54,11 +54,13 @@ struct FMinionWhipConfig
 	bool bWalkIntoWhipFormation = true;
 
 	/** Distance (in cm) within which a minion is considered to have arrived at its whip link slot during walk-in. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WalkInTransition", meta = (EditCondition = "bWalkIntoWhipFormation"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WalkInTransition",
+		meta = (EditCondition = "bWalkIntoWhipFormation"))
 	float WalkInArrivalRadius = 65.0f;
 
 	/** Maximum time (in seconds) to wait for reachable minions to walk into whip formation. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WalkInTransition", meta = (EditCondition = "bWalkIntoWhipFormation"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WalkInTransition",
+		meta = (EditCondition = "bWalkIntoWhipFormation"))
 	float MaxWalkInDuration = 2.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchors")
@@ -79,34 +81,44 @@ struct FMinionWhipConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints")
 	float LinkSpacing = 75.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "5.0", ClampMax = "75.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "5.0", ClampMax = "75.0"))
 	float MaxJointBendAngleDegrees = 28.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "50.0", ClampMax = "10000.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "50.0", ClampMax = "10000.0"))
 	float AngularBendStiffness = 1400.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "10.0", ClampMax = "2000.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "10.0", ClampMax = "2000.0"))
 	float AngularBendDamping = 220.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "1.0", ClampMax = "50.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "1.0", ClampMax = "50.0"))
 	float LinearConstraintSlack = 12.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "100.0", ClampMax = "20000.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "100.0", ClampMax = "20000.0"))
 	float LinearSpringStiffness = 2200.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "10.0", ClampMax = "3000.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "10.0", ClampMax = "3000.0"))
 	float LinearSpringDamping = 280.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints", meta = (ClampMin = "0.0", ClampMax = "20.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DampedChainConstraints",
+		meta = (ClampMin = "0.0", ClampMax = "20.0"))
 	float ChaosLinearDamping = 2.5f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HeightStabilization", meta = (ClampMin = "1.0", ClampMax = "40.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HeightStabilization",
+		meta = (ClampMin = "1.0", ClampMax = "40.0"))
 	float MaxVerticalSlack = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HeightStabilization", meta = (ClampMin = "0.0", ClampMax = "200.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HeightStabilization",
+		meta = (ClampMin = "0.0", ClampMax = "200.0"))
 	float VerticalHeightStiffness = 55.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HeightStabilization", meta = (ClampMin = "0.0", ClampMax = "50.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HeightStabilization",
+		meta = (ClampMin = "0.0", ClampMax = "50.0"))
 	float VerticalHeightDamping = 16.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TornadoSpin")
@@ -147,7 +159,7 @@ struct FMinionWhipConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	float MinPhysicsSpeedForDamage = 650.0f;
-	
+
 	/**  1-heart damage, knockback, HitStop freeze, and camera shake tuning. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage|BOTWFeedback")
 	FHitFeedbackConfig HitFeedback;
@@ -161,13 +173,16 @@ struct FMinionCarryRushConfig
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation", meta = (ClampMin = "0.05", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation",
+		meta = (ClampMin = "0.05", ClampMax = "1.0"))
 	float GatherDuration = 0.22f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation", meta = (ClampMin = "25.0", ClampMax = "120.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation",
+		meta = (ClampMin = "25.0", ClampMax = "120.0"))
 	float PalanquinRowSpacing = 48.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation", meta = (ClampMin = "25.0", ClampMax = "120.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation",
+		meta = (ClampMin = "25.0", ClampMax = "120.0"))
 	float PalanquinColSpacing = 48.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TransportFormation")
@@ -226,19 +241,21 @@ struct FMinionCarryRushConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "EnemyDamage")
 	float EnemyKnockbackStrength = 950.0f;
-	
+
 	/** If true, the player grabs and carries 1 minion along with them during a Carry Jump so they land with at least 1 minion. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MomentumJump")
 	bool bCarryOneMinionDuringJump = true;
 
 	/** Optional SkeletalMesh socket on the Player to attach the carried minion to during the jump (uses CarriedMinionLocalOffset if None). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MomentumJump", meta = (EditCondition = "bCarryOneMinionDuringJump"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MomentumJump",
+		meta = (EditCondition = "bCarryOneMinionDuringJump"))
 	FName CarriedMinionAttachSocket = NAME_None;
 
 	/** Local offset relative to the Player where the 1 carried minion is held during the jump (e.g. overhead or on the back). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MomentumJump", meta = (EditCondition = "bCarryOneMinionDuringJump"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MomentumJump",
+		meta = (EditCondition = "bCarryOneMinionDuringJump"))
 	FVector CarriedMinionLocalOffset = FVector(-25.0f, 0.0f, 55.0f);
-	
+
 	/** If true, clashing head-on with a rushing enemy drops Carry Stance back to Follow so you can immediately Whip Spin Attack. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RushCharge|Clash")
 	bool bExitCarryStanceOnClash = true;
@@ -259,10 +276,23 @@ class UMinionStanceBase : public UObject
 
 public:
 	virtual void Initialize(UMinionSquadComponent* InSquad) { Squad = InSquad; }
-	virtual void OnEnterStance() {}
-	virtual void TickStance(float DeltaTime) {}
-	virtual void OnExitStance() {}
-	virtual void OnSquadRosterChanged() {}
+
+	virtual void OnEnterStance()
+	{
+	}
+
+	virtual void TickStance(float DeltaTime)
+	{
+	}
+
+	virtual void OnExitStance()
+	{
+	}
+
+	virtual void OnSquadRosterChanged()
+	{
+	}
+
 	virtual bool RequiresComponentTick() const { return false; }
 
 protected:
@@ -283,7 +313,7 @@ public:
 	virtual void OnExitStance() override;
 	virtual void OnSquadRosterChanged() override;
 	virtual bool RequiresComponentTick() const override { return false; }
-	
+
 	bool IsLateralEvadeSuppressed() const { return bSuppressingLateralEvade; }
 
 	void ForceImmediateEvaluation();
@@ -299,7 +329,7 @@ private:
 	EMinionFormationMode LastFormationMode = EMinionFormationMode::Crescent;
 	bool bSuppressingLateralEvade = false;
 	bool bHasValidWaitingAnchor = false;
-	
+
 	/** Locked at the takeoff spot so left-behind minions stay grouped even when 1 carried minion is with the player on a ledge. */
 	FTransform WaitingGroupAnchorTransform = FTransform::Identity;
 
@@ -387,7 +417,8 @@ public:
 
 private:
 	void RestorePlayerMovementSettings();
-	FVector CalculatePalanquinSlotLocation(int32 MinionIdx, int32 TotalCount, const FVector& PlayerLoc, const FVector& ForwardDir, const FVector& RightDir) const;
+	FVector CalculatePalanquinSlotLocation(int32 MinionIdx, int32 TotalCount, const FVector& PlayerLoc,
+	                                       const FVector& ForwardDir, const FVector& RightDir) const;
 	void PerformFrontEnemyBumperSweep(const FVector& SweepStart, const FVector& SweepEnd);
 
 	TArray<TWeakObjectPtr<AActor>> RushIgnoredEnemies;
@@ -419,10 +450,16 @@ private:
 // MAIN SQUAD COMPONENT
 // ============================================================================
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMinionRegisteredSignature, AActor*, MinionActor, int32, SlotIndex, int32, TotalMinions);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMinionRegisteredSignature, AActor*, MinionActor, int32, SlotIndex,
+                                               int32, TotalMinions);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnMinionUnregisteredSignature, AActor*, MinionActor, int32, TotalMinions);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSquadMoveUpdatedSignature, int32, ActiveMinionCount, FVector, AnchorWorldLocation);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSquadMoveUpdatedSignature, int32, ActiveMinionCount, FVector,
+                                             AnchorWorldLocation);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSquadDebugMessageSignature, const FString&, DebugMessage);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSquadStanceChangedSignature, EMinionSquadStance, NewStance);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(
@@ -471,7 +508,8 @@ class WS_TOKOBOTDOFUS_API UMinionSquadComponent : public USceneComponent, public
 public:
 	UMinionSquadComponent();
 
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	// ~Begin Blueprint Event Dispatchers
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
@@ -491,7 +529,7 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnWhipDamageHitSignature OnWhipDamageHit;
-	
+
 	/** Rich feedback event (ImpactPoint, Knockback, Hearts, bIsKillingBlow) for Whip VFX/SFX/UI. */
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnWhipCombatFeedbackSignature OnWhipCombatFeedback;
@@ -505,7 +543,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnCarryJumpTriggeredSignature OnCarryJumpTriggered;
 	// ~End Blueprint Event Dispatchers
-	
+
 	/** Topology-aware formation tuning (thin bridges, corridors, walls, ledges, breadcrumbs). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Formation")
 	FMinionFormationConfig FormationConfig;
@@ -541,6 +579,7 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "PikminSquad|Stance")
 	EMinionSquadStance GetSquadStance() const { return CurrentStance; }
+
 	// ~End Squad & Stance Blueprint API
 
 	// ~Begin Whip Attack Blueprint API
@@ -603,8 +642,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "PikminSquad")
 	const TArray<AActor*>& GetActiveMinions() const { return ActiveMinions; }
+
 	// ~End Carry Transport, Rush Charge & Momentum Jump Blueprint API
-	
+
 	// ~Begin Throw, Recall & Checkpoint Reset API
 	/** Picks the closest Idle/Following minion to ReferenceOrigin that can be thrown immediately. */
 	UFUNCTION(BlueprintCallable, Category = "PikminSquad|Throw")
@@ -629,7 +669,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "PikminSquad|Throw")
 	bool CanWorldLocationReachPlayer(const FVector& WorldLocation) const;
 	// ~End Throw, Recall & Checkpoint Reset API
-	
+
 	// Add inside Blueprint Event Dispatchers:
 	/** Fires when Carry Rush cancels head-on against a rushing enemy (e.g., Boar). Bind clash VFX/SFX/Anim here. */
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
@@ -665,11 +705,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config")
 	bool bAutoRegisterMinionsOnBeginPlay = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config", meta = (ClampMin = "1", ClampMax = "16"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config",
+		meta = (ClampMin = "1", ClampMax = "16"))
 	int32 MaxMinions = 8;
 
 	/** Minimum number of minions that must have a valid NavMesh path to the player to allow AttackWhip or CarryRush stances. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config", meta = (ClampMin = "1", ClampMax = "16"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config",
+		meta = (ClampMin = "1", ClampMax = "16"))
 	int32 MinReachableMinionsForSpecialStance = 4;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config")
@@ -690,7 +732,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|WhipAttack", meta = (ShowOnlyInnerProperties))
 	FMinionWhipConfig WhipConfig;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|CarryRushSpell", meta = (ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|CarryRushSpell",
+		meta = (ShowOnlyInnerProperties))
 	FMinionCarryRushConfig CarryRushConfig;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Debug")

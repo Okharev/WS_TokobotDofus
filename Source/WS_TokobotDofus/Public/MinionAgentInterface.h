@@ -11,14 +11,14 @@ class UMinionThrowTargetComponent;
 UENUM(BlueprintType)
 enum class EMinionState : uint8
 {
-	Idle               UMETA(DisplayName = "Idle"),
-	Following          UMETA(DisplayName = "Following Squad"),
-	EvadingPlayer      UMETA(DisplayName = "Evading Player"),
-	TraversingNavLink  UMETA(DisplayName = "Traversing NavLink"),
-	InAttackWhip       UMETA(DisplayName = "Locked in Chaos Attack Whip"),
-	InCarryRush        UMETA(DisplayName = "Carrying Player in Palanquin"),
-	InThrowFlight      UMETA(DisplayName = "Flying Toward Throw Target"),
-	LatchedToTarget    UMETA(DisplayName = "Latched Onto Throw Target")
+	Idle UMETA(DisplayName = "Idle"),
+	Following UMETA(DisplayName = "Following Squad"),
+	EvadingPlayer UMETA(DisplayName = "Evading Player"),
+	TraversingNavLink UMETA(DisplayName = "Traversing NavLink"),
+	InAttackWhip UMETA(DisplayName = "Locked in Chaos Attack Whip"),
+	InCarryRush UMETA(DisplayName = "Carrying Player in Palanquin"),
+	InThrowFlight UMETA(DisplayName = "Flying Toward Throw Target"),
+	LatchedToTarget UMETA(DisplayName = "Latched Onto Throw Target")
 };
 
 UINTERFACE(MinimalAPI, Blueprintable)
@@ -34,7 +34,8 @@ class IMinionAgentInterface
 public:
 	virtual EMinionState GetMinionState() const = 0;
 	virtual bool MoveToSquadSlot(const FVector& ProjectedSlotLocation) = 0;
-	virtual void EvadePlayer(const FVector& PlayerLocation, const FVector& PlayerVelocity, const FVector& PlayerRight) = 0;
+	virtual void EvadePlayer(const FVector& PlayerLocation, const FVector& PlayerVelocity,
+	                         const FVector& PlayerRight) = 0;
 	virtual void ExecuteNavLinkJump(ANavLinkProxy* NavLink, const FVector& LaunchVelocity) = 0;
 	virtual void SetWhipModeEnabled(bool bEnabled) = 0;
 	virtual void SetCarryRushModeEnabled(bool bEnabled) = 0;
@@ -59,13 +60,19 @@ public:
 
 	// --- Foolproof Follow, Corridor, Anti-Stuck & Throw Grace API ---
 	/** Scales Detour Crowd separation down on thin bridges/corridors so minions don't shove each other off edges. */
-	virtual void SetTightCorridorMode(bool bTight) {}
+	virtual void SetTightCorridorMode(bool bTight)
+	{
+	}
 
 	/** Adjusts MaxWalkSpeed smoothly based on slot distance and leader speed (no Tick required). */
-	virtual void UpdateFollowSpeedForDistance(float DistanceToSlot, float LeaderSpeed) {}
+	virtual void UpdateFollowSpeedForDistance(float DistanceToSlot, float LeaderSpeed)
+	{
+	}
 
 	/** Tiered anti-stuck recovery (1 = brief crowd pause + repath, 2 = unsnag hop, 3 = safe catch-up warp). */
-	virtual void ExecuteUnstuckRecovery(int32 RecoveryTier, const FVector& TargetLocation) {}
+	virtual void ExecuteUnstuckRecovery(int32 RecoveryTier, const FVector& TargetLocation)
+	{
+	}
 
 	/** Returns false during post-bounce grace period or busy states so rapid throws cycle across the squad. */
 	virtual bool CanBeThrown() const { return true; }

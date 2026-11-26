@@ -31,11 +31,13 @@ struct FHitFeedbackConfig
 
 	// --- HitStop (Time Freeze) ---
 	/** Freeze duration in real-world seconds for a standard hit (~4 frames at 60fps). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HitStop", meta = (ClampMin = "0.0", ClampMax = "0.5", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HitStop",
+		meta = (ClampMin = "0.0", ClampMax = "0.5", Units = "s"))
 	float HitStopDuration = 0.065f;
 
 	/** Heavier freeze duration in real-world seconds on a killing blow (~8-9 frames at 60fps). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HitStop", meta = (ClampMin = "0.0", ClampMax = "0.6", Units = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HitStop",
+		meta = (ClampMin = "0.0", ClampMax = "0.6", Units = "s"))
 	float KillHitStopDuration = 0.14f;
 
 	/** GlobalTimeDilation during HitStop (UE5 clamps 0.0 to ~0.0001; 0.02 keeps motion ultra-crisp). */
@@ -104,7 +106,7 @@ struct FCombatHitPayload
 
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	FHitResult HitResult;
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	FName AttackType = NAME_None; // e.g., "Whip", "CarryRush", "SpinAttack"
 };

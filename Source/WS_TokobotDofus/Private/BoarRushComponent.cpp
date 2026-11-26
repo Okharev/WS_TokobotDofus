@@ -107,7 +107,8 @@ void UBoarRushComponent::TickChargeUp(float DeltaTime)
 		{
 			const FRotator CurrentRot = OwnerChar->GetActorRotation();
 			const FRotator DesiredRot(0.f, ToTarget.Rotation().Yaw, 0.f);
-			const FRotator NewRot = FMath::RInterpConstantTo(CurrentRot, DesiredRot, DeltaTime, Tuning->ChargeUpTurnRate);
+			const FRotator NewRot = FMath::RInterpConstantTo(CurrentRot, DesiredRot, DeltaTime,
+			                                                 Tuning->ChargeUpTurnRate);
 			OwnerChar->SetActorRotation(NewRot);
 			LockedRushDir = NewRot.Vector().GetSafeNormal2D();
 		}
@@ -186,7 +187,8 @@ bool UBoarRushComponent::ExecuteRush()
 	return true;
 }
 
-void UBoarRushComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UBoarRushComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                       FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
@@ -242,8 +244,8 @@ void UBoarRushComponent::SweepRushHitbox()
 	}
 
 	const FVector Start = RushOrigin.IsValid()
-		? RushOrigin->GetComponentLocation()
-		: OwnerChar->GetActorLocation() + (LockedRushDir * 55.f);
+		                      ? RushOrigin->GetComponentLocation()
+		                      : OwnerChar->GetActorLocation() + (LockedRushDir * 55.f);
 	const FVector End = Start + (LockedRushDir * Tuning->RushHitForwardLength);
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(BoarRushSweep), false, OwnerChar.Get());
@@ -306,7 +308,7 @@ bool UBoarRushComponent::CanClashWithActor(AActor* Candidate) const
 		if (Tuning && Tuning->bDrawDebugTraces)
 		{
 			const FString Msg = FString::Printf(TEXT("[BoarClash REJECT] %s vs %s -> %s"),
-				*GetNameSafe(GetOwner()), *GetNameSafe(Candidate), *Reason);
+			                                    *GetNameSafe(GetOwner()), *GetNameSafe(Candidate), *Reason);
 			UE_LOG(LogTemp, Warning, TEXT("%s"), *Msg);
 			if (GEngine)
 			{
@@ -328,7 +330,8 @@ bool UBoarRushComponent::CanClashWithActor(AActor* Candidate) const
 	UObject* ClashObj = ResolveRushClashObject(Candidate);
 	if (!ClashObj)
 	{
-		return LogReject(TEXT("No IRushClashInterface found on Actor or Components (Cold-rebuild if you used Live Coding!)"));
+		return LogReject(
+			TEXT("No IRushClashInterface found on Actor or Components (Cold-rebuild if you used Live Coding!)"));
 	}
 
 	if (!IRushClashInterface::Execute_IsCarryRushing(ClashObj))
@@ -340,7 +343,7 @@ bool UBoarRushComponent::CanClashWithActor(AActor* Candidate) const
 	if (PlayerSpeed < Tuning->MinPlayerClashSpeed)
 	{
 		return LogReject(FString::Printf(TEXT("Speed too low: %.1f < MinPlayerClashSpeed %.1f (cm/s)"),
-			PlayerSpeed, Tuning->MinPlayerClashSpeed));
+		                                 PlayerSpeed, Tuning->MinPlayerClashSpeed));
 	}
 
 	FVector PlayerRushDir = IRushClashInterface::Execute_GetCarryRushDirection(ClashObj).GetSafeNormal2D();
@@ -357,7 +360,7 @@ bool UBoarRushComponent::CanClashWithActor(AActor* Candidate) const
 	if (HeadOnDot > -Tuning->MinClashHeadOnDot)
 	{
 		return LogReject(FString::Printf(TEXT("Not head-on enough: Dot=%.2f (must be <= %.2f)"),
-			HeadOnDot, -Tuning->MinClashHeadOnDot));
+		                                 HeadOnDot, -Tuning->MinClashHeadOnDot));
 	}
 
 	return true;
@@ -414,7 +417,7 @@ bool UBoarRushComponent::TryResolveRushClash(AActor* Candidate)
 		GEngine->AddOnScreenDebugMessage(
 			-1, 2.5f, FColor::Cyan,
 			FString::Printf(TEXT("[BoarClash] Clashed with %s! Stunned for %.1fs (Spin Attack vulnerable)"),
-				*GetNameSafe(Candidate), Tuning->ClashStunDuration));
+			                *GetNameSafe(Candidate), Tuning->ClashStunDuration));
 	}
 
 	OnRushClashed.Broadcast(Candidate);
@@ -488,8 +491,8 @@ void UBoarRushComponent::ApplyRushHitToTarget(AActor* TargetActor, const FHitRes
 		Payload.MaxHearts = HitResponse.MaxHearts;
 		Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
 		Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
-			? FeedbackCfg.KillHitStopDuration
-			: FeedbackCfg.HitStopDuration;
+			                                 ? FeedbackCfg.KillHitStopDuration
+			                                 : FeedbackCfg.HitStopDuration;
 
 		if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
 		{
@@ -498,8 +501,8 @@ void UBoarRushComponent::ApplyRushHitToTarget(AActor* TargetActor, const FHitRes
 	}
 
 	const float FinalDamage = bHandledByHealthComp
-		? static_cast<float>(Payload.HeartDamage)
-		: Tuning->BaseRushDamage;
+		                          ? static_cast<float>(Payload.HeartDamage)
+		                          : Tuning->BaseRushDamage;
 
 	UGameplayStatics::ApplyDamage(
 		TargetActor, FinalDamage, OwnerChar->GetController(), OwnerChar.Get(), UDamageType::StaticClass());

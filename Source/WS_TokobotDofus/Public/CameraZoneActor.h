@@ -56,32 +56,38 @@ struct FCameraZoneLookAtSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|LockOn", meta = (EditCondition = "bLookAtPlayer"))
 	bool bFrameCombatLockTarget = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|LockOn", meta = (EditCondition = "bLookAtPlayer && bFrameCombatLockTarget", ClampMin = "0.0", ClampMax = "0.75"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|LockOn",
+		meta = (EditCondition = "bLookAtPlayer && bFrameCombatLockTarget", ClampMin = "0.0", ClampMax = "0.75"))
 	float CombatLockFocusWeight = 0.35f;
 
 	// Mirrors USpringArmComponent::bEnableCameraLag (trails a virtual aim point behind the player)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer"))
 	bool bEnableTargetLag = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer && bEnableTargetLag", ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag",
+		meta = (EditCondition = "bLookAtPlayer && bEnableTargetLag", ClampMin = "0.0"))
 	float TargetLagSpeed = 6.0f;
 
 	// Max world-unit distance the aim point can fall behind the player (0 = unclamped)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer && bEnableTargetLag", ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag",
+		meta = (EditCondition = "bLookAtPlayer && bEnableTargetLag", ClampMin = "0.0"))
 	float TargetLagMaxDistance = 150.0f;
 
 	// Mirrors USpringArmComponent::bEnableCameraRotationLag
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer"))
 	bool bEnableRotationLag = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer && bEnableRotationLag", ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag",
+		meta = (EditCondition = "bLookAtPlayer && bEnableRotationLag", ClampMin = "0.0"))
 	float RotationLagSpeed = 8.0f;
 
 	// Framerate-independent lag substepping (matches USpringArmComponent::bUseCameraLagSubstepping)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer && (bEnableTargetLag || bEnableRotationLag)"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag",
+		meta = (EditCondition = "bLookAtPlayer && (bEnableTargetLag || bEnableRotationLag)"))
 	bool bUseLagSubstepping = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag", meta = (EditCondition = "bLookAtPlayer && bUseLagSubstepping", ClampMin = "0.005", ClampMax = "0.5"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LookAt|Lag",
+		meta = (EditCondition = "bLookAtPlayer && bUseLagSubstepping", ClampMin = "0.005", ClampMax = "0.5"))
 	float LagMaxTimeStep = 1.f / 60.f;
 
 	// True = immediately aim at player on zone entry; False = pan smoothly from the authored FixedCamera angle
@@ -131,11 +137,12 @@ protected:
 private:
 	UFUNCTION()
 	void OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	                           UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
+	                           const FHitResult& SweepResult);
 
 	UFUNCTION()
 	void OnTriggerEndOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+	                         UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	TWeakObjectPtr<AActor> TrackedTarget;
 	TWeakObjectPtr<UCameraDirectorComponent> CachedDirector;

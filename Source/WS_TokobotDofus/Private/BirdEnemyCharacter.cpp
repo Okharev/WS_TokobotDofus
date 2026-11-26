@@ -229,11 +229,11 @@ void ABirdEnemyCharacter::UpdateHoverAndAnimTelemetry(float DeltaTime)
 			World,
 			BirdMesh->GetComponentLocation() + FVector(0.f, 0.f, 45.f),
 			FString::Printf(TEXT("Hearts: %d/%d | Stagger:%d | CapsuleZ:%.0f | HurtboxZ:%.0f"),
-				CurHearts,
-				MaxH,
-				bStaggered ? 1 : 0,
-				GetActorLocation().Z,
-				HurtboxSphere ? HurtboxSphere->GetComponentLocation().Z : 0.f),
+			                CurHearts,
+			                MaxH,
+			                bStaggered ? 1 : 0,
+			                GetActorLocation().Z,
+			                HurtboxSphere ? HurtboxSphere->GetComponentLocation().Z : 0.f),
 			nullptr,
 			FColor::White,
 			0.0f,
@@ -350,7 +350,8 @@ void ABirdEnemyCharacter::StartFallbackAttack()
 	if (Tuning.bDrawDebugTraces && AttackOrigin)
 	{
 		// Cyan sphere telegraphs the wind-up before the strike fires
-		DrawDebugSphere(World, AttackOrigin->GetComponentLocation(), 18.f, 8, FColor::Cyan, false, Tuning.FallbackWindupDuration, 0, 1.5f);
+		DrawDebugSphere(World, AttackOrigin->GetComponentLocation(), 18.f, 8, FColor::Cyan, false,
+		                Tuning.FallbackWindupDuration, 0, 1.5f);
 	}
 
 	if (Tuning.FallbackWindupDuration <= KINDA_SMALL_NUMBER)
@@ -459,8 +460,8 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 	if (Tuning.bDrawDebugTraces)
 	{
 		const FColor TraceColor = HitResults.IsEmpty()
-			? FColor::Green
-			: (bBlockingHit ? FColor::Red : FColor::Yellow);
+			                          ? FColor::Green
+			                          : (bBlockingHit ? FColor::Red : FColor::Yellow);
 
 		DrawDebugSphere(World, End, Tuning.AttackTraceRadius, 12, TraceColor, false, 0.1f);
 		DrawDebugLine(World, Start, End, TraceColor, false, 0.1f, 0, 2.0f);
@@ -543,8 +544,8 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 			Payload.MaxHearts = HitResponse.MaxHearts;
 			Payload.bIsKillingBlow = HitResponse.bWasKillingBlow;
 			Payload.AppliedHitStopDuration = HitResponse.bWasKillingBlow
-				? FeedbackCfg.KillHitStopDuration
-				: FeedbackCfg.HitStopDuration;
+				                                 ? FeedbackCfg.KillHitStopDuration
+				                                 : FeedbackCfg.HitStopDuration;
 
 			if (UHitFeedbackSubsystem* FeedbackSub = World->GetSubsystem<UHitFeedbackSubsystem>())
 			{
@@ -554,8 +555,8 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 
 		// Keep standard UE5 Event AnyDamage working alongside UHeartHealthComponent
 		const float FinalDamage = bHandledByHealthComp
-			? static_cast<float>(Payload.HeartDamage)
-			: (Tuning.BaseDamage * ActiveDamageMultiplier);
+			                          ? static_cast<float>(Payload.HeartDamage)
+			                          : (Tuning.BaseDamage * ActiveDamageMultiplier);
 
 		UGameplayStatics::ApplyDamage(HitActor, FinalDamage, GetController(), this, UDamageType::StaticClass());
 
@@ -567,7 +568,7 @@ void ABirdEnemyCharacter::PerformAttackHitTrace()
 			GEngine->AddOnScreenDebugMessage(
 				-1, 2.0f, FColor::Red,
 				FString::Printf(TEXT("[BirdAttack] Hit %s for %.0f | Hearts Left: %d/%d"),
-					*GetNameSafe(HitActor), FinalDamage, Payload.RemainingHearts, Payload.MaxHearts));
+				                *GetNameSafe(HitActor), FinalDamage, Payload.RemainingHearts, Payload.MaxHearts));
 		}
 	}
 }
