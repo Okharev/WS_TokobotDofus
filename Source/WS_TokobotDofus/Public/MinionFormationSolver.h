@@ -93,6 +93,8 @@ struct FMinionFormationSolveResult
 	FVector DebugBackHit = FVector::ZeroVector;
 };
 
+
+
 /**
  * Timer-driven NavMesh topology & breadcrumb formation solver.
  * Guarantees every output slot lies continuously on the player's NavMesh island

@@ -496,6 +496,20 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	AActor*, ClashedOpponent,
 	FVector, RecoilVelocity);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FOnStanceWheelChangedSignature,
+	int32, NewWheelIndex,
+	int32, PreviousWheelIndex,
+	int32, RotationDirection,
+	EMinionSquadStance, NewStance);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FOnStanceWheelChangeRejectedSignature,
+	int32, AttemptedWheelIndex,
+	EMinionSquadStance, AttemptedStance,
+	int32, ReachableMinions,
+	int32, RequiredMinions);
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class WS_TOKOBOTDOFUS_API UMinionSquadComponent : public USceneComponent, public IRushClashInterface
 {
@@ -543,12 +557,40 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
 	FOnCarryJumpTriggeredSignature OnCarryJumpTriggered;
 	// ~End Blueprint Event Dispatchers
+	
+	/** Fires whenever the active stance changes, providing wheel indices and shortest/requested rotation direction (+1 right, -1 left). */
+	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
+	FOnStanceWheelChangedSignature OnStanceWheelChanged;
+
+	/** Fires when a stance transition is blocked (e.g., player airborne or fewer than MinReachableMinionsForSpecialStance reachable). */
+	UPROPERTY(BlueprintAssignable, Category = "PikminSquad|Events")
+	FOnStanceWheelChangeRejectedSignature OnStanceWheelChangeRejected;
 
 	/** Topology-aware formation tuning (thin bridges, corridors, walls, ledges, breadcrumbs). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Formation")
 	FMinionFormationConfig FormationConfig;
 
 	// ~Begin Squad & Stance Blueprint API
+	
+	/** Steps the formation wheel forward (+1 / right) or backward (-1 / left) with wrap-around. Returns false if blocked. */
+	UFUNCTION(BlueprintCallable, Category = "PikminSquad|StanceWheel")
+	bool CycleStanceWheel(int32 Direction);
+
+	/** Directly requests the stance mapped to WheelIndex in StanceWheelOrder. */
+	UFUNCTION(BlueprintCallable, Category = "PikminSquad|StanceWheel")
+	bool SetSquadStanceByWheelIndex(int32 WheelIndex);
+
+	/** Returns the wheel index corresponding to the currently active stance (INDEX_NONE if not mapped). */
+	UFUNCTION(BlueprintPure, Category = "PikminSquad|StanceWheel")
+	int32 GetCurrentWheelIndex() const;
+
+	/** Resolves any stance enum to its configured index in StanceWheelOrder. */
+	UFUNCTION(BlueprintPure, Category = "PikminSquad|StanceWheel")
+	int32 GetWheelIndexForStance(EMinionSquadStance Stance) const;
+
+	UFUNCTION(BlueprintPure, Category = "PikminSquad|StanceWheel")
+	int32 GetWheelSlotCount() const { return StanceWheelOrder.Num(); }
+	
 	UFUNCTION(BlueprintCallable, Category = "PikminSquad")
 	bool RegisterMinion(AActor* MinionActor);
 
@@ -702,6 +744,9 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "PikminSquad|Runtime")
 	EMinionSquadStance CurrentStance = EMinionSquadStance::Follow;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|StanceWheel")
+	TArray<EMinionSquadStance> StanceWheelOrder;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PikminSquad|Config")
 	bool bAutoRegisterMinionsOnBeginPlay = true;
 
@@ -764,6 +809,11 @@ private:
 	FVector CalculateSlotWorldLocation(int32 SlotIndex) const;
 	void BroadcastDebug(const FString& Message, FColor ScreenColor = FColor::Cyan, float Duration = 3.0f) const;
 
+	int32 ComputeShortestWheelDirection(int32 FromIndex, int32 ToIndex) const;
+
+	/** Preserves explicit +1/-1 input direction through SetSquadStance; 0 falls back to shortest circular path. */
+	int32 PendingWheelDirection = 0;
+	
 	UFUNCTION()
 	void OnPlayerAvoidanceOverlap(
 		UPrimitiveComponent* OverlappedComponent,

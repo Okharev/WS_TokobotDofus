@@ -2106,11 +2106,26 @@ UMinionSquadComponent::UMinionSquadComponent()
 	PrimaryComponentTick.bStartWithTickEnabled = false;
 
 	SetRelativeLocation(FVector(-160.0f, 0.0f, 0.0f));
+
+	StanceWheelOrder = {
+		EMinionSquadStance::Follow,
+		EMinionSquadStance::AttackWhip,
+		EMinionSquadStance::CarryRush
+	};
 }
 
 void UMinionSquadComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	if (StanceWheelOrder.IsEmpty())
+	{
+		StanceWheelOrder = {
+			EMinionSquadStance::Follow,
+			EMinionSquadStance::AttackWhip,
+			EMinionSquadStance::CarryRush
+		};
+	}
 
 	SetComponentTickEnabled(false);
 
@@ -2416,8 +2431,9 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 		return true;
 	}
 
-	// Gate special stances (AttackWhip and CarryRush):
-	// Only minions with a complete path to the player can join, and at least MinReachableMinionsForSpecialStance (4) are required!
+	const int32 PreviousWheelIndex = GetWheelIndexForStance(CurrentStance);
+	const int32 TargetWheelIndex = GetWheelIndexForStance(NewStance);
+
 	TArray<TObjectPtr<AActor>> ValidReachableMinions;
 	TArray<TScriptInterface<IMinionAgentInterface>> ValidReachableInterfaces;
 
@@ -2433,6 +2449,13 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 				                ReachableCount, ActiveMinions.Num(), MinReachableMinionsForSpecialStance),
 				FColor::Red,
 				2.5f);
+
+			OnStanceWheelChangeRejected.Broadcast(
+				TargetWheelIndex,
+				NewStance,
+				ReachableCount,
+				MinReachableMinionsForSpecialStance);
+
 			return false;
 		}
 	}
@@ -2452,11 +2475,9 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 	}
 	else
 	{
-		// Populate StanceMinions with ONLY the reachable minions!
 		StanceMinions = MoveTemp(ValidReachableMinions);
 		StanceMinionInterfaces = MoveTemp(ValidReachableInterfaces);
 
-		// Stop any unreachable minions so they remain waiting calmly on their island
 		for (AActor* MinionActor : ActiveMinions)
 		{
 			if (IsValid(MinionActor) && !StanceMinions.Contains(MinionActor))
@@ -2482,7 +2503,12 @@ bool UMinionSquadComponent::SetSquadStance(EMinionSquadStance NewStance)
 		ActiveStanceObject->OnEnterStance();
 	}
 
+	const int32 ResolvedDirection = (PendingWheelDirection != 0)
+		                                ? PendingWheelDirection
+		                                : ComputeShortestWheelDirection(PreviousWheelIndex, TargetWheelIndex);
+
 	OnSquadStanceChanged.Broadcast(CurrentStance);
+	OnStanceWheelChanged.Broadcast(TargetWheelIndex, PreviousWheelIndex, ResolvedDirection, CurrentStance);
 	return true;
 }
 
@@ -2579,6 +2605,70 @@ bool UMinionSquadComponent::IsWalkingIntoWhipFormation() const
 	return (CurrentStance == EMinionSquadStance::AttackWhip && WhipStanceInstance)
 		       ? WhipStanceInstance->IsWalkingIntoFormation()
 		       : false;
+}
+
+bool UMinionSquadComponent::CycleStanceWheel(int32 Direction)
+{
+	if (StanceWheelOrder.IsEmpty() || Direction == 0)
+	{
+		return false;
+	}
+
+	const int32 Step = (Direction > 0) ? 1 : -1;
+	const int32 Count = StanceWheelOrder.Num();
+
+	int32 CurrentIndex = GetCurrentWheelIndex();
+	if (CurrentIndex == INDEX_NONE)
+	{
+		CurrentIndex = 0;
+	}
+
+	const int32 TargetIndex = (CurrentIndex + Step + Count) % Count;
+
+	PendingWheelDirection = Step;
+	const bool bSuccess = SetSquadStance(StanceWheelOrder[TargetIndex]);
+	PendingWheelDirection = 0;
+
+	return bSuccess;
+}
+
+bool UMinionSquadComponent::SetSquadStanceByWheelIndex(int32 WheelIndex)
+{
+	if (!StanceWheelOrder.IsValidIndex(WheelIndex))
+	{
+		return false;
+	}
+
+	const int32 CurrentIndex = GetCurrentWheelIndex();
+	PendingWheelDirection = ComputeShortestWheelDirection(CurrentIndex, WheelIndex);
+	const bool bSuccess = SetSquadStance(StanceWheelOrder[WheelIndex]);
+	PendingWheelDirection = 0;
+
+	return bSuccess;
+}
+
+int32 UMinionSquadComponent::GetCurrentWheelIndex() const
+{
+	return GetWheelIndexForStance(CurrentStance);
+}
+
+int32 UMinionSquadComponent::GetWheelIndexForStance(EMinionSquadStance Stance) const
+{
+	return StanceWheelOrder.IndexOfByKey(Stance);
+}
+
+int32 UMinionSquadComponent::ComputeShortestWheelDirection(int32 FromIndex, int32 ToIndex) const
+{
+	const int32 Count = StanceWheelOrder.Num();
+	if (Count <= 1 || FromIndex == INDEX_NONE || ToIndex == INDEX_NONE || FromIndex == ToIndex)
+	{
+		return 0;
+	}
+
+	const int32 ForwardSteps = (ToIndex - FromIndex + Count) % Count;
+	const int32 BackwardSteps = (FromIndex - ToIndex + Count) % Count;
+
+	return (ForwardSteps <= BackwardSteps) ? 1 : -1;
 }
 
 bool UMinionSquadComponent::StartCarryRushCharge(bool bAutoEnterCarryStance)
