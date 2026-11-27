@@ -1,6 +1,8 @@
 // CameraDirectorComponent.cpp
 #include "CameraDirectorComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Camera/CameraComponent.h"
+#include "Camera/CameraActor.h"
 #include "CameraZoneActor.h"
 #include "CombatLockOnTargetComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -55,6 +57,169 @@ void UCameraDirectorComponent::ClearAllZones(float BlendOutTime)
 	UpdateTickState();
 }
 
+void UCameraDirectorComponent::BeginVoidFallCamera(bool bWatchFallingPlayer, float WatchRotationSpeed)
+{
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	if (!PC || !PC->PlayerCameraManager)
+	{
+		return;
+	}
+
+	// Cancel lock-on, center snap, and movement basis latch immediately
+	SetCombatLockTarget(nullptr);
+	bCenterSnapActive = false;
+	NotifyMoveInputReleased();
+
+	// Prevent dropping out of a CameraZoneActor's TriggerBox from blending back to the falling pawn
+	bZoneStackLocked = true;
+
+	// If in a Fixed CameraZoneActor, keep that zone's view frozen on screen until the black cut
+	if (IsInFixedCameraZone())
+	{
+		bVoidWatchActive = false;
+		UpdateTickState();
+		return;
+	}
+
+	// Free 3P: lazily spawn a single reusable camera actor and freeze it at the exact current camera view
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (!IsValid(VoidWatchCameraActor))
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.ObjectFlags |= RF_Transient;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		VoidWatchCameraActor = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FTransform::Identity,
+		                                                       SpawnParams);
+		if (IsValid(VoidWatchCameraActor) && VoidWatchCameraActor->GetCameraComponent())
+		{
+			VoidWatchCameraActor->GetCameraComponent()->bConstrainAspectRatio = false;
+		}
+	}
+
+	if (IsValid(VoidWatchCameraActor))
+	{
+		const FVector CamLoc = PC->PlayerCameraManager->GetCameraLocation();
+		const FRotator CamRot = PC->PlayerCameraManager->GetCameraRotation();
+		VoidWatchCameraActor->SetActorLocationAndRotation(CamLoc, CamRot);
+
+		if (UCameraComponent* WatchCam = VoidWatchCameraActor->GetCameraComponent())
+		{
+			WatchCam->SetFieldOfView(PC->PlayerCameraManager->GetFOVAngle());
+		}
+
+		// Seamless 0-second cut to the identical world transform: camera stops chasing the falling player
+		PC->SetViewTarget(VoidWatchCameraActor);
+
+		bVoidWatchActive = true;
+		bVoidWatchFollowFallingPawn = bWatchFallingPlayer;
+		VoidWatchRotSpeed = WatchRotationSpeed;
+		UpdateTickState();
+	}
+}
+
+void UCameraDirectorComponent::UpdateVoidWatchCamera(float DeltaTime, APawn* Pawn)
+{
+	if (!bVoidWatchFollowFallingPawn || !IsValid(VoidWatchCameraActor) || !IsValid(Pawn))
+	{
+		return;
+	}
+
+	const FVector CamLoc = VoidWatchCameraActor->GetActorLocation();
+	const FVector ToFallingPawn = (Pawn->GetActorLocation() - CamLoc).GetSafeNormal();
+	if (ToFallingPawn.IsNearlyZero())
+	{
+		return;
+	}
+
+	// Gently tilt downward toward the falling player without ever translating into the pit
+	const FRotator CurrentRot = VoidWatchCameraActor->GetActorRotation();
+	const FRotator DesiredRot = ToFallingPawn.Rotation();
+	const FRotator NewRot = FMath::RInterpTo(CurrentRot, DesiredRot, DeltaTime, VoidWatchRotSpeed);
+	VoidWatchCameraActor->SetActorRotation(NewRot);
+}
+
+void UCameraDirectorComponent::EndVoidFallCameraAndSnapToPlayer(const FRotator& DesiredRespawnControlRot)
+{
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (!PC || !Pawn)
+	{
+		bZoneStackLocked = false;
+		bVoidWatchActive = false;
+		return;
+	}
+
+	bZoneStackLocked = false;
+	bVoidWatchActive = false;
+	NotifyMoveInputReleased();
+
+	// Snap free-3P control rotation & immediately restore SpringArm base framing
+	PC->SetControlRotation(DesiredRespawnControlRot);
+
+	if (EnsureSpringArmCached(Pawn))
+	{
+		CachedSpringArm->TargetArmLength = BaseTargetArmLength;
+		CachedSpringArm->SocketOffset = BaseSocketOffset;
+		bSpringArmNeedsRestore = false;
+
+		// Flush SpringArm's internal PreviousDesiredLoc by disabling lag across the black-hold tick
+		if (!bSpringArmLagFlushing)
+		{
+			bSavedEnableCameraLag = CachedSpringArm->bEnableCameraLag;
+			bSavedEnableCameraRotationLag = CachedSpringArm->bEnableCameraRotationLag;
+			CachedSpringArm->bEnableCameraLag = false;
+			CachedSpringArm->bEnableCameraRotationLag = false;
+			bSpringArmLagFlushing = true;
+		}
+	}
+
+	// Re-resolve the active zone at the teleported respawn point with a 0-second hard cut behind black
+	ACameraZoneActor* TopZone = GetTopPriorityZone();
+	CurrentActiveZone = TopZone;
+
+	FViewTargetTransitionParams InstantCut;
+	InstantCut.BlendTime = 0.0f;
+
+	if (TopZone)
+	{
+		TopZone->NotifyActivated(Pawn);
+		TopZone->SnapLookToTargetImmediately();
+		PC->SetViewTarget(TopZone, InstantCut);
+	}
+	else
+	{
+		PC->SetViewTarget(Pawn, InstantCut);
+	}
+
+	// Critical for UE5 TSR, Lumen, and Motion Blur: prevents history smearing on fade-in
+	if (PC->PlayerCameraManager)
+	{
+		PC->PlayerCameraManager->SetGameCameraCutThisFrame();
+	}
+
+	UpdateTickState();
+}
+
+void UCameraDirectorComponent::RestoreSpringArmLagAfterTeleport()
+{
+	if (!bSpringArmLagFlushing)
+	{
+		return;
+	}
+
+	if (CachedSpringArm.IsValid())
+	{
+		CachedSpringArm->bEnableCameraLag = bSavedEnableCameraLag;
+		CachedSpringArm->bEnableCameraRotationLag = bSavedEnableCameraRotationLag;
+	}
+	bSpringArmLagFlushing = false;
+}
+
 ACameraZoneActor* UCameraDirectorComponent::GetTopPriorityZone()
 {
 	// Prune any destroyed/streamed-out zones first
@@ -75,6 +240,11 @@ ACameraZoneActor* UCameraDirectorComponent::GetTopPriorityZone()
 
 void UCameraDirectorComponent::EvaluateStack(const ACameraZoneActor* ExitingZone)
 {
+	if (bZoneStackLocked)
+	{
+		return;
+	}
+	
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
 	if (!PC)
 	{
@@ -201,7 +371,7 @@ void UCameraDirectorComponent::UpdateTickState()
 {
 	const bool bNeedLockDrive = ActiveLockTarget.IsValid() && !IsInFixedCameraZone();
 	const bool bNeedSnapDrive = bCenterSnapActive && !IsInFixedCameraZone();
-	const bool bNeedsTick = bNeedLockDrive || bNeedSnapDrive || bSpringArmNeedsRestore;
+	const bool bNeedsTick = bNeedLockDrive || bNeedSnapDrive || bSpringArmNeedsRestore || bVoidWatchActive;
 	SetComponentTickEnabled(bNeedsTick);
 }
 
@@ -219,6 +389,12 @@ void UCameraDirectorComponent::TickComponent(
 		return;
 	}
 
+	if (bVoidWatchActive)
+	{
+		UpdateVoidWatchCamera(DeltaTime, Pawn);
+		return;
+	}
+	
 	if (!IsInFixedCameraZone())
 	{
 		if (ActiveLockTarget.IsValid())

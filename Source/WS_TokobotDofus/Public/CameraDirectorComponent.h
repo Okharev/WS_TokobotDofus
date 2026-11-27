@@ -6,6 +6,7 @@
 #include "CameraDirectorComponent.generated.h"
 
 class ACameraZoneActor;
+class ACameraActor;
 class UCombatLockOnTargetComponent;
 class USpringArmComponent;
 
@@ -33,6 +34,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Retro Camera")
 	bool IsInFixedCameraZone() const { return CurrentActiveZone.IsValid(); }
 
+	// --- Void-Fall Recovery Camera Controls ---
+	/** Freezes Free-3P camera at the rim (watching the drop) or locks active Fixed CameraZone transitions. */
+	UFUNCTION(BlueprintCallable, Category = "Retro Camera|VoidRecovery")
+	void BeginVoidFallCamera(bool bWatchFallingPlayer = true, float WatchRotationSpeed = 4.0f);
+
+	/** Unlocks zone transitions, hard-cuts behind the fade, flushes SpringArm lag, and flags a renderer camera cut. */
+	UFUNCTION(BlueprintCallable, Category = "Retro Camera|VoidRecovery")
+	void EndVoidFallCameraAndSnapToPlayer(const FRotator& DesiredRespawnControlRot);
+
+	/** Restores cached SpringArm lag flags after the black-screen hold tick finishes. */
+	UFUNCTION(BlueprintCallable, Category = "Retro Camera|VoidRecovery")
+	void RestoreSpringArmLagAfterTeleport();
+	
 	// --- Combat Z-Targeting & Center Snap ---
 	/** Called automatically by UCombatLockOnComponent when lock state changes. */
 	UFUNCTION(BlueprintCallable, Category = "Retro Camera|LockOn")
@@ -136,6 +150,21 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<ACameraZoneActor> CurrentActiveZone;
 
+	void UpdateVoidWatchCamera(float DeltaTime, APawn* Pawn);
+
+	UPROPERTY(Transient)
+	TObjectPtr<ACameraActor> VoidWatchCameraActor;
+
+	bool bZoneStackLocked = false;
+	bool bVoidWatchActive = false;
+	bool bVoidWatchFollowFallingPawn = true;
+	float VoidWatchRotSpeed = 4.0f;
+
+	// Cached SpringArm lag flags for 1-frame teleport lag flush
+	bool bSpringArmLagFlushing = false;
+	bool bSavedEnableCameraLag = false;
+	bool bSavedEnableCameraRotationLag = false;
+	
 	// Movement latching state
 	FVector ActiveForward = FVector::ForwardVector;
 	FVector ActiveRight = FVector::RightVector;

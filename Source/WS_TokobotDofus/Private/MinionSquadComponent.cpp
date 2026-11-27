@@ -2972,8 +2972,17 @@ void UMinionSquadComponent::ResetMinionsToPlayerCheckpoint(bool bDetachFromInter
 		SetSquadStance(EMinionSquadStance::Follow);
 	}
 
+	// >>> ADD THESE LINES HERE <<<
+	// Clean up an interrupted Carry Jump (player fell into void before LandedDelegate fired)
+	if (CarryRushStanceInstance && CarryRushStanceInstance->IsCarryJumping())
+	{
+		CarryRushStanceInstance->HandlePlayerLanded(FHitResult());
+	}
+	// >>> END ADDITION <<<
+
 	const int32 MinionCount = PruneInvalidMinions();
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	
 	const FVector NavExtent(250.0f, 250.0f, 500.0f);
 
 	for (int32 i = 0; i < MinionCount; ++i)

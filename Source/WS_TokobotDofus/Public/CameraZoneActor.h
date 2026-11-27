@@ -124,6 +124,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Retro Camera|Tracking")
 	FCameraZoneLookAtSettings LookAt;
 
+	/** Resets LookAt lag state so the next CalcCamera snaps directly onto a teleported target. */
+	UFUNCTION(BlueprintCallable, Category = "Retro Camera")
+	void SnapLookToTargetImmediately() { bHasInitializedLook = false; }
+	
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> SceneRoot;
